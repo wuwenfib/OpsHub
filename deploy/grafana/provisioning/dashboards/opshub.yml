@@ -1,0 +1,10 @@
+# 告诉 Grafana 去哪个目录加载看板 JSON。改了 JSON 后 30s 内自动生效。
+apiVersion: 1
+providers:
+  - name: opshub
+    folder: OpsHub
+    type: file
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/dashboards

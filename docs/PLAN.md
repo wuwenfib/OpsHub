@@ -27,7 +27,7 @@
   - 学什么：告警规则里的 `for` 是为了防抖动；标签决定告警最后被路由到哪里、关联到哪个系统。
   - 验收：执行 `make chaos-slow`，在 Alertmanager 页面看到告警从 pending 变成 firing。
 
-- [ ] **1.4 Grafana 预置看板**
+- [x] **1.4 Grafana 预置看板**
   - 做什么：通过 provisioning 自动配好数据源和一个"系统健康总览"看板（QPS、错误率、P95 延迟、主机资源）。
   - 验收：`make up` 之后打开 Grafana 不需要任何手动配置就能看到图。
 
