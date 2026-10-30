@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Plus, Refresh } from '@element-plus/icons-vue'
 import { api } from '../api'
@@ -8,13 +8,15 @@ import { formatTime, severityType, statusTag } from '../format'
 import { loadOperator, saveOperator } from '../operator'
 
 const router = useRouter()
+const route = useRoute()
 
 // ---------- 列表与筛选（筛选交给后端：?status=&system=&overdue=true） ----------
 const tickets = ref([])
 const systems = ref([])
 const loading = ref(false)
 const error = ref('')
-const filter = reactive({ status: '', system: '', overdue: false })
+// 支持从其他页面带筛选条件进来，例如 SLA 看板的 /tickets?overdue=true
+const filter = reactive({ status: '', system: route.query.system ?? '', overdue: route.query.overdue === 'true' })
 const statusOptions = ['new', 'acknowledged', 'resolved', 'reopened', 'closed']
 
 async function load() {
