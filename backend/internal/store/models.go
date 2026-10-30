@@ -50,6 +50,36 @@ type SystemHost struct {
 	HostID   int64 `json:"host_id"`
 }
 
+type Ticket struct {
+	ID               int64       `json:"id"`
+	Type             string      `json:"type"`
+	Title            string      `json:"title"`
+	SystemID         pgtype.Int8 `json:"system_id"`
+	SystemLabel      string      `json:"system_label"`
+	Severity         string      `json:"severity"`
+	Status           string      `json:"status"`
+	Source           string      `json:"source"`
+	AlertFingerprint pgtype.Text `json:"alert_fingerprint"`
+	Assignee         string      `json:"assignee"`
+	CreatedAt        time.Time   `json:"created_at"`
+	RespondedAt      *time.Time  `json:"responded_at"`
+	ResolvedAt       *time.Time  `json:"resolved_at"`
+	ClosedAt         *time.Time  `json:"closed_at"`
+	ResponseDeadline time.Time   `json:"response_deadline"`
+	ResolveDeadline  time.Time   `json:"resolve_deadline"`
+}
+
+type TicketLog struct {
+	ID         int64       `json:"id"`
+	TicketID   int64       `json:"ticket_id"`
+	Actor      string      `json:"actor"`
+	Action     string      `json:"action"`
+	FromStatus pgtype.Text `json:"from_status"`
+	ToStatus   pgtype.Text `json:"to_status"`
+	Note       string      `json:"note"`
+	CreatedAt  time.Time   `json:"created_at"`
+}
+
 type Vendor struct {
 	ID          int64       `json:"id"`
 	Name        string      `json:"name"`

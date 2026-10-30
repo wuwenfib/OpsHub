@@ -18,3 +18,8 @@ sql:
         overrides:
           - db_type: timestamptz
             go_type: time.Time
+          - db_type: timestamptz   # 可空的时间列（如 responded_at）→ *time.Time，JSON 里是 null
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true

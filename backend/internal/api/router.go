@@ -18,8 +18,10 @@ type Pinger interface {
 
 // Deps 汇总路由需要的全部依赖，由 main 组装后传入。
 type Deps struct {
-	DB   Pinger
-	CMDB *service.CMDB
+	DB      Pinger
+	CMDB    *service.CMDB
+	Alerts  *service.Alerts
+	Tickets *service.Tickets
 }
 
 func NewRouter(d Deps) *gin.Engine {
@@ -30,6 +32,8 @@ func NewRouter(d Deps) *gin.Engine {
 
 	apiGroup := r.Group("/api")
 	cmdbHandler{svc: d.CMDB}.register(apiGroup)
+	alertHandler{svc: d.Alerts}.register(apiGroup)
+	ticketHandler{svc: d.Tickets}.register(apiGroup)
 	return r
 }
 

@@ -44,9 +44,12 @@ func run() error {
 		return err
 	}
 
+	st := store.NewStore(pool)
 	router := api.NewRouter(api.Deps{
-		DB:   pool,
-		CMDB: service.NewCMDB(store.NewStore(pool)),
+		DB:      pool,
+		CMDB:    service.NewCMDB(st),
+		Alerts:  service.NewAlerts(st, service.RealClock{}),
+		Tickets: service.NewTickets(st),
 	})
 	srv := &http.Server{Addr: addr, Handler: router}
 	errCh := make(chan error, 1)

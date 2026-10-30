@@ -1,0 +1,45 @@
+{
+  "receiver": "opshub",
+  "status": "firing",
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": {
+        "alertname": "GovAppHighErrorRate",
+        "severity": "P2",
+        "system": "GOV-APPLY"
+      },
+      "annotations": {
+        "description": "当前错误率 28.33%",
+        "summary": "GOV-APPLY 接口错误率超过 5%"
+      },
+      "startsAt": "2026-10-30T07:10:15.123Z",
+      "endsAt": "0001-01-01T00:00:00Z",
+      "generatorURL": "http://prometheus:9090/graph?g0.expr=...",
+      "fingerprint": "a1b2c3d4e5f60718"
+    },
+    {
+      "status": "resolved",
+      "labels": {
+        "alertname": "GovAppHighLatency",
+        "severity": "P2",
+        "system": "GOV-APPLY"
+      },
+      "annotations": {
+        "description": "当前 P95 延迟 2.51s",
+        "summary": "GOV-APPLY 接口 P95 延迟超过 1s"
+      },
+      "startsAt": "2026-10-30T06:20:00Z",
+      "endsAt": "2026-10-30T06:30:00Z",
+      "generatorURL": "http://prometheus:9090/graph?g0.expr=...",
+      "fingerprint": "0f1e2d3c4b5a6978"
+    }
+  ],
+  "groupLabels": { "alertname": "GovAppHighErrorRate", "system": "GOV-APPLY" },
+  "commonLabels": { "system": "GOV-APPLY", "severity": "P2" },
+  "commonAnnotations": {},
+  "externalURL": "http://alertmanager:9093",
+  "version": "4",
+  "groupKey": "{}:{alertname=\"GovAppHighErrorRate\", system=\"GOV-APPLY\"}",
+  "truncatedAlerts": 0
+}

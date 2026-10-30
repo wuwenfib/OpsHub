@@ -4,7 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/fh/opshub/backend/internal/apperr"
 )
@@ -30,5 +34,15 @@ func TestStatusOf(t *testing.T) {
 				t.Errorf("got (%d, %s), want (%d, %s)", status, code, tt.wantStatus, tt.wantCode)
 			}
 		})
+	}
+}
+
+func TestWebhookRejectsBadPayload(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := NewRouter(Deps{DB: fakePinger{}}) // 解析失败时不会走到 service，可以不传
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest("POST", "/api/alerts/webhook", strings.NewReader(`{"alerts": [`)))
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400, body = %s", rec.Code, rec.Body)
 	}
 }

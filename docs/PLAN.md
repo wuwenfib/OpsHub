@@ -50,7 +50,7 @@
   - `sla_policy` 表加种子数据，例如：一级系统 P1 响应 15 分钟、恢复 2 小时；三级系统 P3 响应 4 小时、恢复 3 个工作日（先按自然日简化）。
   - 验收：给定系统等级和严重级别，能算出两个 deadline，并有单元测试覆盖。
 
-- [ ] **2.4 Alertmanager webhook 接入**
+- [x] **2.4 Alertmanager webhook 接入**
   - `POST /api/alerts/webhook`：解析 Alertmanager 的 payload → 按 `system` 标签关联 CMDB → 按 fingerprint 去重 → 新建事件单或追加日志；`resolved` 只记日志、不关单。
   - 学什么：告警 ≠ 工单。告警是机器信号，工单是要人负责的任务；去重和关联是为了避免"告警风暴"把人淹没。
   - 验收：`make chaos-error` 后 1～2 分钟内自动出现一张 P2 事件单，并且关联到正确的系统和厂商；重复告警不会生成重复工单。

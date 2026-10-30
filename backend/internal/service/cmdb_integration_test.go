@@ -8,13 +8,15 @@ import (
 	"os"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/fh/opshub/backend/internal/apperr"
 	"github.com/fh/opshub/backend/internal/cmdb"
 	"github.com/fh/opshub/backend/internal/store"
 )
 
-// newTestStore 连接 opshub_test 库、迁移到最新，并清空 CMDB 表。需先 make up。
-func newTestStore(t *testing.T) *store.Store {
+// newTestDB 连接 opshub_test 库、迁移到最新，并清空业务表（保留 sla_policy 参考数据）。需先 make up。
+func newTestDB(t *testing.T) (*store.Store, *pgxpool.Pool) {
 	t.Helper()
 	url := os.Getenv("OPSHUB_TEST_DATABASE_URL")
 	if url == "" {
@@ -29,10 +31,15 @@ func newTestStore(t *testing.T) *store.Store {
 	if err := store.Migrate(url); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	if _, err := pool.Exec(ctx, "TRUNCATE vendor, business_system, host RESTART IDENTITY CASCADE"); err != nil {
+	if _, err := pool.Exec(ctx, "TRUNCATE vendor, business_system, host, ticket RESTART IDENTITY CASCADE"); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
-	return store.NewStore(pool)
+	return store.NewStore(pool), pool
+}
+
+func newTestStore(t *testing.T) *store.Store {
+	st, _ := newTestDB(t)
+	return st
 }
 
 // must 用于测试准备步骤：出错直接 panic（测试框架会把它记为失败）。
