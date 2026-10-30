@@ -1,0 +1,94 @@
+# OpsHub 全部容器。通过根目录 Makefile 调用：make up / make down。
+# 账号密码均为本地演示用的固定值。
+
+services:
+  # ---------- 被管对象层 ----------
+  mock-gov-app:
+    build: ../mock/mock-gov-app
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+
+  # 被监控的"业务库"，与 OpsHub 自己的 PostgreSQL 无关。
+  mysql:
+    image: mysql:8.4.13
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: govdb
+    volumes:
+      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  # ---------- 工具层：exporter ----------
+  # 读宿主机 /proc、/sys，把 CPU/内存/磁盘翻译成指标。
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    command: ["--path.rootfs=/host"]
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    restart: unless-stopped
+
+  # 用只读账号登录 MySQL，把 SHOW GLOBAL STATUS 等翻译成指标。
+  mysqld-exporter:
+    image: prom/mysqld-exporter:v0.21.0
+    command:
+      - --mysqld.address=mysql:3306
+      - --mysqld.username=exporter
+    environment:
+      MYSQLD_EXPORTER_PASSWORD: exporter
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # 从外部发 HTTP 探测，回答"这个系统还活着吗"。使用镜像自带的 http_2xx 模块。
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.29.1
+    restart: unless-stopped
+
+  # ---------- 工具层：存储、告警、看图 ----------
+  prometheus:
+    image: prom/prometheus:v3.15.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:v0.34.2
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+    volumes:
+      - ./alertmanager:/etc/alertmanager:ro
+    ports:
+      - "9093:9093"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.2.5
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"   # 本机 3000 被占用时在 deploy/.env 里改
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
+  prometheus-data:
+  grafana-data:

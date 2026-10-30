@@ -1,0 +1,55 @@
+global:
+  scrape_interval: 15s      # 每 15s 去每个目标拉一次指标
+  evaluation_interval: 15s  # 每 15s 计算一次告警规则
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+# system 标签在这里打，而不是写进应用代码：被管系统的代码往往改不动，
+# "这个目标属于哪个业务系统"是运维侧的台账信息。值必须等于 CMDB 里的 business_system.code。
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: alertmanager
+    static_configs:
+      - targets: ["alertmanager:9093"]
+
+  - job_name: mock-gov-app
+    static_configs:
+      - targets: ["mock-gov-app:8081"]
+        labels: { system: GOV-APPLY }
+
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]
+        labels: { system: GOV-APPLY }
+
+  - job_name: mysql
+    static_configs:
+      - targets: ["mysqld-exporter:9104"]
+        labels: { system: GOV-APPLY }
+
+  # blackbox 的用法比较特殊：Prometheus 实际抓的是 blackbox-exporter:9115/probe?target=<URL>，
+  # 由 blackbox 去访问 URL 并返回 probe_success 等结果。
+  # 下面的 relabel 把"要探测的 URL"挪到 target 参数和 instance 标签上，再把真正的抓取地址换成 blackbox。
+  - job_name: blackbox-http
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets: ["http://mock-gov-app:8081/healthz"]
+        labels: { system: GOV-APPLY }
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115

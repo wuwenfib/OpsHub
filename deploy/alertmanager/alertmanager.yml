@@ -1,0 +1,19 @@
+route:
+  receiver: opshub
+  # 同一系统的同一种告警合并成一组发送，避免一次故障推几十条。
+  group_by: [alertname, system]
+  group_wait: 10s       # 组内第一条告警到达后等 10s，攒一攒同组的再发
+  group_interval: 1m    # 组内有新告警时，最快 1m 再发一次
+  repeat_interval: 4h   # 告警一直没恢复时，每 4h 重复提醒一次
+
+receivers:
+  - name: opshub
+    webhook_configs:
+      - url: http://opshub:8080/api/alerts/webhook
+        send_resolved: true
+
+# 抑制：服务已经探活失败时，它的"慢""报错"告警都是噪音。
+inhibit_rules:
+  - source_matchers: [alertname = GovAppProbeDown]
+    target_matchers: [alertname =~ "GovAppHighLatency|GovAppHighErrorRate"]
+    equal: [system]

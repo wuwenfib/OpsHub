@@ -121,6 +121,6 @@ make chaos-reset   # 恢复正常
 | 前端 dev | 5173 |
 | Prometheus | 9090 |
 | Alertmanager | 9093 |
-| Grafana | 3000 |
+| Grafana | 3000（本机冲突时在 `deploy/.env` 设 `GRAFANA_PORT`） |
 | mock-gov-app | 8081 |
 | PostgreSQL | 5432 |

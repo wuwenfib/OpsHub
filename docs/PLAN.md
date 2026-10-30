@@ -13,7 +13,7 @@
   - 学什么：Prometheus 指标的四种类型（Counter / Gauge / Histogram / Summary），应用怎么"暴露"自己的健康状态。
   - 验收：`curl :8081/metrics` 能看到自定义指标；调用 `/chaos/slow` 后延迟指标明显升高。
 
-- [ ] **1.2 docker-compose 拉起监控全家桶**
+- [x] **1.2 docker-compose 拉起监控全家桶**
   - 做什么：Prometheus、Alertmanager、Grafana、node_exporter、blackbox_exporter、MySQL + mysqld_exporter、mock-gov-app。
   - 学什么：Prometheus 是"拉"（pull）模型——它主动去各个 exporter 抓数据；exporter 是"翻译官"，把各种系统的状态翻译成统一的指标格式。
   - 验收：Prometheus 的 Targets 页面里所有目标都是 UP。
