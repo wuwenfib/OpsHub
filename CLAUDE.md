@@ -65,13 +65,16 @@ opshub/
 ├── backend/
 │   ├── cmd/opshub/main.go
 │   ├── internal/
-│   │   ├── api/              # gin 路由与 handler
-│   │   ├── cmdb/             # 台账领域逻辑
+│   │   ├── api/              # gin 路由与 handler，错误 → HTTP 状态码
+│   │   ├── service/          # 用例编排：校验 → 事务 → 读写库
+│   │   ├── apperr/           # 跨层共用的哨兵错误
+│   │   ├── cmdb/             # 台账领域逻辑（纯校验，零 IO）
 │   │   ├── alert/            # Alertmanager webhook 解析、去重、关联
 │   │   ├── ticket/           # 工单与状态机
 │   │   ├── sla/              # SLA 策略与计时
-│   │   └── store/            # 数据库访问
-│   └── migrations/
+│   │   └── store/            # 数据库访问：queries/*.sql → sqlc 生成代码
+│   ├── migrations/           # 版本化迁移，go:embed 进二进制，启动时自动执行
+│   └── seed/                 # 演示数据（make seed）
 └── frontend/                 # 第三阶段
 ```
 
@@ -106,7 +109,11 @@ opshub/
 make up            # 启动全部容器
 make down          # 停止
 make logs s=opshub # 看某个服务日志
-make test          # 后端单元测试
+make test          # 单元测试（含告警规则测试，不需要数据库）
+make test-integration  # 集成测试，连 compose 里的 opshub_test 库，需先 make up
+make seed          # 导入演示数据（可重复执行）
+make tools         # 安装 sqlc（需要 gcc）
+make sqlc          # 改了 migrations 或 queries 后重新生成 store 代码
 make chaos-slow    # 让 mock-gov-app 变慢，触发延迟告警
 make chaos-error   # 让 mock-gov-app 大量 500，触发错误率告警
 make chaos-down    # 停掉 mock-gov-app，触发探活失败告警

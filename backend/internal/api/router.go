@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/fh/opshub/backend/internal/service"
 )
 
 // Pinger 是健康检查唯一需要的能力。*pgxpool.Pool 天然满足它，测试里可以换成假的。
@@ -14,11 +16,20 @@ type Pinger interface {
 	Ping(ctx context.Context) error
 }
 
-func NewRouter(db Pinger) *gin.Engine {
+// Deps 汇总路由需要的全部依赖，由 main 组装后传入。
+type Deps struct {
+	DB   Pinger
+	CMDB *service.CMDB
+}
+
+func NewRouter(d Deps) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())
 
-	r.GET("/healthz", healthz(db))
+	r.GET("/healthz", healthz(d.DB))
+
+	apiGroup := r.Group("/api")
+	cmdbHandler{svc: d.CMDB}.register(apiGroup)
 	return r
 }
 

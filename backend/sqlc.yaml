@@ -1,0 +1,20 @@
+# sqlc 根据 migrations 里的表结构 + queries 里的 SQL 生成 Go 代码：make sqlc
+version: "2"
+sql:
+  - engine: postgresql
+    schema: migrations
+    queries: internal/store/queries
+    gen:
+      go:
+        package: store
+        out: internal/store
+        sql_package: pgx/v5
+        emit_json_tags: true
+        emit_empty_slices: true
+        rename:
+          ip: IP
+          os: OS
+          host_ids: HostIDs
+        overrides:
+          - db_type: timestamptz
+            go_type: time.Time

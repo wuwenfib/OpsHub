@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/fh/opshub/backend/internal/api"
+	"github.com/fh/opshub/backend/internal/service"
 	"github.com/fh/opshub/backend/internal/store"
 )
 
@@ -43,7 +44,11 @@ func run() error {
 		return err
 	}
 
-	srv := &http.Server{Addr: addr, Handler: api.NewRouter(pool)}
+	router := api.NewRouter(api.Deps{
+		DB:   pool,
+		CMDB: service.NewCMDB(store.NewStore(pool)),
+	})
+	srv := &http.Server{Addr: addr, Handler: router}
 	errCh := make(chan error, 1)
 	go func() {
 		slog.Info("opshub listening", "addr", addr)
