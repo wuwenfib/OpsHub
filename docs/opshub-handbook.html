@@ -114,6 +114,7 @@ td.wrap-code code { white-space: normal; }
         <li><a href="#decisions">设计取舍</a></li>
       </ul>
     </li>
+    <li><a href="#trace">一次故障的全过程</a></li>
     <li><a href="#monitoring">监控侧</a></li>
     <li><a href="#frontend">前端</a></li>
     <li><a href="#run">运行与演示</a></li>
@@ -648,6 +649,118 @@ CREATE INDEX ticket_status_idx ON ticket (status);</code></pre>
     <tr><td><code>sla_policy</code> 进迁移，演示数据进 seed</td><td>策略是系统运行的前提；演示系统和历史工单删了也不影响运行</td></tr>
     <tr><td>删除厂商或系统时置空，不级联删工单</td><td>考核历史不能因为台账变动而消失</td></tr>
   </table></div>
+</section>
+
+<section id="trace">
+  <h2>一次故障的全过程</h2>
+  <p>以 <code>make chaos-error</code> 为例，跟踪一次错误率故障从发生到显示在页面上的完整路径。时间取自彩排实测，<code>T+</code> 是距离注入故障的秒数。</p>
+<pre><code>mock-gov-app → Prometheus → Alertmanager → OpsHub 后端 → PostgreSQL
+                                                  ↑ 前端定时拉取</code></pre>
+
+  <h3>故障发生（T+0s）</h3>
+  <p>程序：<code>mock/mock-gov-app/app.go</code></p>
+  <ol>
+    <li><code>make chaos-error</code> 调用 <code>POST /chaos/error</code>，<code>setMode(modeError)</code> 把原子变量 <code>mode</code> 改成 2。</li>
+    <li><code>runLoadgen</code> 每秒发 5 个 <code>GET /api/apply</code>。</li>
+    <li>请求先进入中间件 <code>instrument</code>，再进入 <code>handleApply</code>，约 30% 的请求返回 500。</li>
+    <li><code>instrument</code> 记录指标：<code>http_requests_total{code="500",handler="apply"}</code> 加 1。</li>
+  </ol>
+  <p>到这一步，系统只是多了一些计数，还没有任何告警。</p>
+
+  <h3>Prometheus 发现异常（T+24s ～ T+84s）</h3>
+  <ol>
+    <li><strong>抓取</strong>：每 15 秒访问 <code>mock-gov-app:8081/metrics</code>，并按 <code>prometheus.yml</code> 给数据打上 <code>system="GOV-APPLY"</code> 标签。</li>
+    <li><strong>计算规则</strong>：每 15 秒执行一次 <code>GovAppHighErrorRate</code>，判断 5xx 占比是否超过 5%。</li>
+    <li><strong>状态变化</strong>：T+24s 进入 <code>pending</code>；连续成立 1 分钟后，T+84s 变成 <code>firing</code>。</li>
+  </ol>
+
+  <h3>Alertmanager 推送（T+84s ～ T+93s）</h3>
+  <ol>
+    <li>Prometheus 把 firing 的告警发给 Alertmanager。</li>
+    <li>Alertmanager 按 <code>[alertname, system]</code> 分组，<code>group_wait</code> 等 10 秒，看同组还有没有别的告警。</li>
+    <li>它向 <code>http://opshub:8080/api/alerts/webhook</code> 发 POST，内容大致如下。</li>
+  </ol>
+<pre><code>{"status": "firing", "alerts": [{
+  "status": "firing",
+  "fingerprint": "6727d4861df6bb8a",
+  "labels": {"alertname": "GovAppHighErrorRate", "system": "GOV-APPLY", "severity": "P2"},
+  "annotations": {"summary": "GOV-APPLY 接口错误率超过 5%", "description": "当前错误率 29.33%"}
+}]}</code></pre>
+
+  <h3>OpsHub 后端建单（T+93s）</h3>
+<pre><code>gin 路由 POST /api/alerts/webhook
+└─ alertHandler.webhook                 api/alert.go
+   ├─ c.GetRawData()                    读取请求体
+   ├─ alert.Parse(body)                 解析 JSON，格式错误返回 400
+   └─ Alerts.Handle(ctx, payload)       service/alert.go，逐条处理
+      └─ handleOne(ctx, alert)
+         └─ st.InTx(...)                开启事务
+            ├─ q.GetOpenTicketByFingerprint   查到 ErrNoRows：还没有未关闭工单
+            ├─ alert.Decide(a, false)         结果：CreateTicket
+            └─ createTicket(ctx, q, a, now)
+               ├─ q.GetSystemByCode("GOV-APPLY")   查台账：一级系统
+               ├─ a.Severity()                     得到 P2
+               ├─ policyFor(ctx, q, 1, P2)         查 sla_policy：30 分钟 / 4 小时
+               ├─ policy.DeadlinesFrom(now)        算出两个截止时间
+               ├─ q.CreateAlertTicket(...)         INSERT ... ON CONFLICT DO NOTHING
+               └─ q.InsertTicketLog(...)           写一条 created 流水
+            事务提交
+   └─ 返回 200 {"received":1,"created":1,...}</code></pre>
+  <p>这时数据库里多了两行：</p>
+  <ul>
+    <li><code>ticket</code>：状态 <code>new</code>，级别 P2，<code>system_id</code> 指向 GOV-APPLY，带两个截止时间。</li>
+    <li><code>ticket_log</code>：操作者 <code>alertmanager</code>，动作 <code>created</code>，备注"告警 GovAppHighErrorRate 触发，自动建单：当前错误率 29.33%"。</li>
+  </ul>
+  <p>如果同一告警又推送一次，<code>Decide</code> 会返回 <code>AppendDuplicate</code>，只追加一条流水，不再建单。</p>
+
+  <h3>数据到达前端</h3>
+  <p>后端不会主动通知前端，是前端定时来取，所以工单可能要等最多 30 秒才出现，点"刷新"会立刻更新。</p>
+<pre><code>浏览器 TicketsView.vue
+├─ setInterval(load, 30000)                每 30 秒执行一次
+└─ load()
+   └─ api.get('/api/tickets?')             api.js，调用 fetch
+      └─ Vite 代理 :5173 → :8080           vite.config.js
+
+后端
+└─ ticketHandler.list                      api/ticket.go
+   └─ Tickets.List                         service/ticket.go
+      ├─ st.ListTickets(...)               ticket 关联 business_system、vendor
+      ├─ slaTimes(...) + sla.Evaluate(...) 算出每张单是否达标、是否超时
+      └─ 组装 TicketListItem
+   └─ respond(...)                         序列化成 JSON 返回
+
+回到浏览器
+├─ tickets.value = 返回结果                 触发 Vue 响应式更新
+└─ el-table 重新渲染
+   ├─ severityType(row.severity)            P2 标签颜色
+   ├─ statusTag(row.status)                 new 显示为"待受理"
+   ├─ formatTime(row.created_at)            UTC 转北京时间
+   └─ rowClass                              超时的单整行标红</code></pre>
+  <p>点击这一行后，路由跳到工单详情页，<code>TicketDetailView</code> 调用 <code>GET /api/tickets/:id</code>。后端的 <code>Tickets.Get</code> 依次执行 <code>GetTicketView</code>、<code>ListTicketLogs</code> 和 <code>sla.Evaluate</code>，页面据此显示倒计时和流水时间线。</p>
+
+  <h3>之后的处理</h3>
+  <div class="table"><table>
+    <tr><th>环节</th><th>触发</th><th>程序路径</th><th>结果</th></tr>
+    <tr><td>受理</td><td>页面点"受理"</td><td class="wrap-code"><code>ticketHandler.do</code> → <code>Tickets.Do</code> → <code>GetTicketForUpdate</code> → <code>ticket.Apply</code> → <code>UpdateTicketState</code> → <code>InsertTicketLog</code></td><td>状态变为处理中，写入响应时间</td></tr>
+    <tr><td>恢复服务</td><td class="wrap-code"><code>make chaos-reset</code></td><td><code>mode</code> 改回 0，错误率回落</td><td>Prometheus 判定告警恢复</td></tr>
+    <tr><td>标记恢复</td><td>页面点"标记恢复"</td><td class="wrap-code">同受理，走 <code>Tickets.Do</code></td><td>写入恢复时间</td></tr>
+    <tr><td>恢复通知</td><td class="wrap-code">Alertmanager 推送 <code>status=resolved</code></td><td class="wrap-code"><code>Decide</code> 返回 <code>AppendRecovered</code> → <code>appendLog</code></td><td>只记"告警已恢复"，不关单</td></tr>
+    <tr><td>关单</td><td>甲方点"确认关闭"</td><td class="wrap-code">同受理，走 <code>Tickets.Do</code></td><td>状态变为已关闭，释放去重索引</td></tr>
+    <tr><td>考核</td><td>打开 SLA 看板</td><td class="wrap-code"><code>statsHandler.sla</code> → <code>Stats.SLA</code> → <code>ListTicketsForStats</code> → <code>sla.Aggregate</code></td><td>达标率和 MTTR 更新</td></tr>
+  </table></div>
+
+  <h3>数据在每一段的形态</h3>
+  <div class="table"><table>
+    <tr><th>位置</th><th>形态</th></tr>
+    <tr><td class="wrap-code"><code>mock-gov-app</code> 内存</td><td>计数器：500 错误次数加 1</td></tr>
+    <tr><td>Prometheus</td><td class="wrap-code">带 <code>system</code> 标签的时间序列，以及告警状态</td></tr>
+    <tr><td>Alertmanager</td><td>告警对象，带指纹，经过分组</td></tr>
+    <tr><td>HTTP</td><td>webhook JSON</td></tr>
+    <tr><td>PostgreSQL</td><td class="wrap-code"><code>ticket</code> 和 <code>ticket_log</code> 的行</td></tr>
+    <tr><td>HTTP</td><td>工单 JSON，附带 SLA 判定结果</td></tr>
+    <tr><td>浏览器</td><td>表格一行：P2、星河软件、待受理</td></tr>
+  </table></div>
+  <p>关键的转换有两处：Prometheus 把数字变成告警；OpsHub 把告警变成有人负责、有时限的工单。"星河软件"这个厂商信息并不在告警里，它是查询工单列表时，通过 <code>system_id</code> 关联台账查出来的。</p>
 </section>
 
 <section id="monitoring">
