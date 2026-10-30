@@ -68,6 +68,60 @@ func (q *Queries) CreateAlertTicket(ctx context.Context, arg CreateAlertTicketPa
 	return i, err
 }
 
+const createManualTicket = `-- name: CreateManualTicket :one
+INSERT INTO ticket (
+    type, title, system_id, system_label, severity, status, source,
+    created_at, response_deadline, resolve_deadline
+) VALUES (
+    $1, $2, $3, $4, $5, 'new', 'manual', $6, $7, $8
+)
+RETURNING id, type, title, system_id, system_label, severity, status, source, alert_fingerprint, assignee, created_at, responded_at, resolved_at, closed_at, response_deadline, resolve_deadline
+`
+
+type CreateManualTicketParams struct {
+	Type             string      `json:"type"`
+	Title            string      `json:"title"`
+	SystemID         pgtype.Int8 `json:"system_id"`
+	SystemLabel      string      `json:"system_label"`
+	Severity         string      `json:"severity"`
+	CreatedAt        time.Time   `json:"created_at"`
+	ResponseDeadline time.Time   `json:"response_deadline"`
+	ResolveDeadline  time.Time   `json:"resolve_deadline"`
+}
+
+func (q *Queries) CreateManualTicket(ctx context.Context, arg CreateManualTicketParams) (Ticket, error) {
+	row := q.db.QueryRow(ctx, createManualTicket,
+		arg.Type,
+		arg.Title,
+		arg.SystemID,
+		arg.SystemLabel,
+		arg.Severity,
+		arg.CreatedAt,
+		arg.ResponseDeadline,
+		arg.ResolveDeadline,
+	)
+	var i Ticket
+	err := row.Scan(
+		&i.ID,
+		&i.Type,
+		&i.Title,
+		&i.SystemID,
+		&i.SystemLabel,
+		&i.Severity,
+		&i.Status,
+		&i.Source,
+		&i.AlertFingerprint,
+		&i.Assignee,
+		&i.CreatedAt,
+		&i.RespondedAt,
+		&i.ResolvedAt,
+		&i.ClosedAt,
+		&i.ResponseDeadline,
+		&i.ResolveDeadline,
+	)
+	return i, err
+}
+
 const getOpenTicketByFingerprint = `-- name: GetOpenTicketByFingerprint :one
 SELECT id, type, title, system_id, system_label, severity, status, source, alert_fingerprint, assignee, created_at, responded_at, resolved_at, closed_at, response_deadline, resolve_deadline FROM ticket
 WHERE alert_fingerprint = $1 AND status <> 'closed'
@@ -75,6 +129,35 @@ WHERE alert_fingerprint = $1 AND status <> 'closed'
 
 func (q *Queries) GetOpenTicketByFingerprint(ctx context.Context, alertFingerprint pgtype.Text) (Ticket, error) {
 	row := q.db.QueryRow(ctx, getOpenTicketByFingerprint, alertFingerprint)
+	var i Ticket
+	err := row.Scan(
+		&i.ID,
+		&i.Type,
+		&i.Title,
+		&i.SystemID,
+		&i.SystemLabel,
+		&i.Severity,
+		&i.Status,
+		&i.Source,
+		&i.AlertFingerprint,
+		&i.Assignee,
+		&i.CreatedAt,
+		&i.RespondedAt,
+		&i.ResolvedAt,
+		&i.ClosedAt,
+		&i.ResponseDeadline,
+		&i.ResolveDeadline,
+	)
+	return i, err
+}
+
+const getTicketForUpdate = `-- name: GetTicketForUpdate :one
+SELECT id, type, title, system_id, system_label, severity, status, source, alert_fingerprint, assignee, created_at, responded_at, resolved_at, closed_at, response_deadline, resolve_deadline FROM ticket WHERE id = $1 FOR UPDATE
+`
+
+// 状态变更前锁住该行：并发的两个操作（如同时关闭和重开）会排队，后到的看到的是新状态。
+func (q *Queries) GetTicketForUpdate(ctx context.Context, id int64) (Ticket, error) {
+	row := q.db.QueryRow(ctx, getTicketForUpdate, id)
 	var i Ticket
 	err := row.Scan(
 		&i.ID,
@@ -226,9 +309,16 @@ SELECT t.id, t.type, t.title, t.system_id, t.system_label, t.severity, t.status,
 FROM ticket t
 LEFT JOIN business_system s ON s.id = t.system_id
 LEFT JOIN vendor v ON v.id = s.vendor_id
+WHERE ($1::text IS NULL OR t.status = $1)
+  AND ($2::text IS NULL OR t.system_label = $2)
 ORDER BY t.id DESC
 LIMIT 200
 `
+
+type ListTicketsParams struct {
+	Status pgtype.Text `json:"status"`
+	System pgtype.Text `json:"system"`
+}
 
 type ListTicketsRow struct {
 	ID               int64       `json:"id"`
@@ -252,8 +342,9 @@ type ListTicketsRow struct {
 	VendorName       string      `json:"vendor_name"`
 }
 
-func (q *Queries) ListTickets(ctx context.Context) ([]ListTicketsRow, error) {
-	rows, err := q.db.Query(ctx, listTickets)
+// 两个筛选条件都可选：传 NULL 表示不筛选。system 按告警原始标签匹配，未登记系统也能查到。
+func (q *Queries) ListTickets(ctx context.Context, arg ListTicketsParams) ([]ListTicketsRow, error) {
+	rows, err := q.db.Query(ctx, listTickets, arg.Status, arg.System)
 	if err != nil {
 		return nil, err
 	}
@@ -290,4 +381,31 @@ func (q *Queries) ListTickets(ctx context.Context) ([]ListTicketsRow, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateTicketState = `-- name: UpdateTicketState :exec
+UPDATE ticket
+SET status = $2, assignee = $3, responded_at = $4, resolved_at = $5, closed_at = $6
+WHERE id = $1
+`
+
+type UpdateTicketStateParams struct {
+	ID          int64      `json:"id"`
+	Status      string     `json:"status"`
+	Assignee    string     `json:"assignee"`
+	RespondedAt *time.Time `json:"responded_at"`
+	ResolvedAt  *time.Time `json:"resolved_at"`
+	ClosedAt    *time.Time `json:"closed_at"`
+}
+
+func (q *Queries) UpdateTicketState(ctx context.Context, arg UpdateTicketStateParams) error {
+	_, err := q.db.Exec(ctx, updateTicketState,
+		arg.ID,
+		arg.Status,
+		arg.Assignee,
+		arg.RespondedAt,
+		arg.ResolvedAt,
+		arg.ClosedAt,
+	)
+	return err
 }

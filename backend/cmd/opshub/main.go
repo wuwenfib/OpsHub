@@ -49,7 +49,7 @@ func run() error {
 		DB:      pool,
 		CMDB:    service.NewCMDB(st),
 		Alerts:  service.NewAlerts(st, service.RealClock{}),
-		Tickets: service.NewTickets(st),
+		Tickets: service.NewTickets(st, service.RealClock{}),
 	})
 	srv := &http.Server{Addr: addr, Handler: router}
 	errCh := make(chan error, 1)

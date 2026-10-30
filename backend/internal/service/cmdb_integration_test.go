@@ -37,6 +37,23 @@ func newTestDB(t *testing.T) (*store.Store, *pgxpool.Pool) {
 	return store.NewStore(pool), pool
 }
 
+// warmPool 预先建好 n 条连接放回池里。连接池是懒创建的，新建连接（TCP + 密码认证）要几毫秒，
+// 比一个短事务还慢；不预热的话，并发测试里的请求会被"建连接"无意中排成队，测不到真正的竞争。
+func warmPool(t *testing.T, pool *pgxpool.Pool, n int) {
+	t.Helper()
+	conns := make([]*pgxpool.Conn, 0, n)
+	for range min(n, int(pool.Config().MaxConns)) {
+		c, err := pool.Acquire(context.Background())
+		if err != nil {
+			t.Fatalf("warm pool: %v", err)
+		}
+		conns = append(conns, c)
+	}
+	for _, c := range conns {
+		c.Release()
+	}
+}
+
 func newTestStore(t *testing.T) *store.Store {
 	st, _ := newTestDB(t)
 	return st

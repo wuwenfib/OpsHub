@@ -72,7 +72,7 @@ func TestAlertLifecycle(t *testing.T) {
 	if res := svc.Handle(ctx, payload(a)); res.Created != 1 {
 		t.Fatalf("first firing: %+v", res)
 	}
-	tickets := must(st.ListTickets(ctx))
+	tickets := must(st.ListTickets(ctx, store.ListTicketsParams{}))
 	if len(tickets) != 1 {
 		t.Fatalf("tickets = %d", len(tickets))
 	}
@@ -93,7 +93,7 @@ func TestAlertLifecycle(t *testing.T) {
 	if res := svc.Handle(ctx, payload(resolved(a))); res.Recovered != 1 {
 		t.Fatalf("resolved: %+v", res)
 	}
-	detail := must(NewTickets(st).Get(ctx, tk.ID))
+	detail := must(NewTickets(st, fixedClock{t0}).Get(ctx, tk.ID))
 	if detail.Status != "new" {
 		t.Errorf("status after resolved = %s, want new（不应自动关单）", detail.Status)
 	}
@@ -109,7 +109,7 @@ func TestAlertLifecycle(t *testing.T) {
 	if res := svc.Handle(ctx, payload(a)); res.Created != 1 {
 		t.Fatalf("firing after close: %+v", res)
 	}
-	if n := len(must(st.ListTickets(ctx))); n != 2 {
+	if n := len(must(st.ListTickets(ctx, store.ListTicketsParams{}))); n != 2 {
 		t.Errorf("tickets after re-fire = %d, want 2", n)
 	}
 }
@@ -166,12 +166,13 @@ func TestAlertEdgeCases(t *testing.T) {
 // 20 个并发请求推送同一告警：唯一索引保证只建一张工单，其余都记为重复。
 func TestAlertConcurrentDedup(t *testing.T) {
 	ctx := context.Background()
-	st := newTestStore(t)
+	st, pool := newTestDB(t)
 	setupGovApply(t, st)
 	svc := NewAlerts(st, fixedClock{t0})
 	a := firing("fp-storm", "GOV-APPLY", "P2")
 
 	const n = 20
+	warmPool(t, pool, n)
 	results := make([]WebhookResult, n)
 	var wg sync.WaitGroup
 	start := make(chan struct{}) // 起跑线：所有 goroutine 就位后同时放行，确保真的并发
@@ -195,7 +196,7 @@ func TestAlertConcurrentDedup(t *testing.T) {
 	if created != 1 || dup != n-1 || failed != 0 {
 		t.Errorf("created=%d duplicates=%d failed=%d, want 1/%d/0", created, dup, failed, n-1)
 	}
-	tickets := must(st.ListTickets(ctx))
+	tickets := must(st.ListTickets(ctx, store.ListTicketsParams{}))
 	if len(tickets) != 1 {
 		t.Fatalf("tickets = %d, want 1", len(tickets))
 	}
@@ -206,7 +207,7 @@ func TestAlertConcurrentDedup(t *testing.T) {
 
 func findByLabel(t *testing.T, st *store.Store, label string) store.ListTicketsRow {
 	t.Helper()
-	for _, tk := range must(st.ListTickets(context.Background())) {
+	for _, tk := range must(st.ListTickets(context.Background(), store.ListTicketsParams{})) {
 		if tk.SystemLabel == label {
 			return tk
 		}
