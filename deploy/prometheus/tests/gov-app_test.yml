@@ -1,0 +1,89 @@
+# 告警规则单元测试：make test-rules
+# 序列写法 'a+bxN' 表示从 a 开始、每个点加 b、共 N+1 个点；点间隔为下面的 interval。
+rule_files:
+  - ../rules/gov-app.yml
+
+evaluation_interval: 15s
+
+tests:
+  # 所有请求都落在 (1s, 2s] 桶里 → P95 ≈ 1.95s，持续超过 1m 后 firing。
+  - interval: 15s
+    input_series:
+      - series: 'http_request_duration_seconds_bucket{system="GOV-APPLY",handler="apply",le="1"}'
+        values: '0+0x20'
+      - series: 'http_request_duration_seconds_bucket{system="GOV-APPLY",handler="apply",le="2"}'
+        values: '0+10x20'
+      - series: 'http_request_duration_seconds_bucket{system="GOV-APPLY",handler="apply",le="+Inf"}'
+        values: '0+10x20'
+    alert_rule_test:
+      - eval_time: 1m      # 条件刚成立不久，还在 pending
+        alertname: GovAppHighLatency
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: GovAppHighLatency
+        exp_alerts:
+          - exp_labels: { system: GOV-APPLY, severity: P2 }
+            exp_annotations:
+              summary: GOV-APPLY 接口 P95 延迟超过 1s
+              description: 当前 P95 延迟 1.95s
+
+  # 每 15s 60 个成功、10 个失败 → 错误率 1/7 ≈ 14.29%。
+  - interval: 15s
+    input_series:
+      - series: 'http_requests_total{system="GOV-APPLY",handler="apply",code="200"}'
+        values: '0+60x20'
+      - series: 'http_requests_total{system="GOV-APPLY",handler="apply",code="500"}'
+        values: '0+10x20'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: GovAppHighErrorRate
+        exp_alerts:
+          - exp_labels: { system: GOV-APPLY, severity: P2 }
+            exp_annotations:
+              summary: GOV-APPLY 接口错误率超过 5%
+              description: 当前错误率 14.29%
+
+  # 正常流量：0 错误 → 不告警。
+  - interval: 15s
+    input_series:
+      - series: 'http_requests_total{system="GOV-APPLY",handler="apply",code="200"}'
+        values: '0+60x20'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: GovAppHighErrorRate
+        exp_alerts: []
+
+  # 探活：前 30s 成功，之后失败。失败持续不足 30s 时 pending，超过后 firing。
+  - interval: 15s
+    input_series:
+      - series: 'probe_success{system="GOV-APPLY",job="blackbox-http",instance="http://mock-gov-app:8081/healthz"}'
+        values: '1 1 1 0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: GovAppProbeDown
+        exp_alerts: []
+      - eval_time: 1m45s
+        alertname: GovAppProbeDown
+        exp_alerts:
+          - exp_labels:
+              system: GOV-APPLY
+              severity: P1
+              job: blackbox-http
+              instance: http://mock-gov-app:8081/healthz
+            exp_annotations:
+              summary: GOV-APPLY 探活失败
+              description: http://mock-gov-app:8081/healthz 无法访问
+
+  # CPU：idle 每 15s 只涨 1.5 秒（单核）→ 使用率 90%，持续 5m 后 firing。
+  - interval: 15s
+    input_series:
+      - series: 'node_cpu_seconds_total{system="GOV-APPLY",instance="node-exporter:9100",cpu="0",mode="idle"}'
+        values: '0+1.5x60'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: HostHighCPU
+        exp_alerts:
+          - exp_labels: { system: GOV-APPLY, instance: "node-exporter:9100", severity: P3 }
+            exp_annotations:
+              summary: GOV-APPLY 主机 CPU 使用率超过 85%
+              description: node-exporter:9100 当前 CPU 使用率 90%

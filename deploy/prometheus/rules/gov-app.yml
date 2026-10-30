@@ -1,0 +1,54 @@
+# 告警规则。约定：
+#   - 每条规则必须带 system 标签（值等于 CMDB 的 business_system.code），OpsHub 靠它关联台账；
+#     system 来自抓取配置里打的目标标签，所以表达式聚合时要 by (system) 保留它。
+#   - severity 取 P1～P4，直接作为工单的严重级别。
+#   - summary 作为工单标题。
+#   - for 是防抖：条件要连续成立这么久才从 pending 变成 firing，避免毛刺触发告警。
+groups:
+  - name: gov-app
+    rules:
+      - alert: GovAppHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum by (system, le) (rate(http_request_duration_seconds_bucket[1m]))
+          ) > 1
+        for: 1m
+        labels:
+          severity: P2
+        annotations:
+          summary: '{{ $labels.system }} 接口 P95 延迟超过 1s'
+          description: '当前 P95 延迟 {{ printf "%.2f" $value }}s'
+
+      - alert: GovAppHighErrorRate
+        expr: |
+          sum by (system) (rate(http_requests_total{code=~"5.."}[1m]))
+            /
+          sum by (system) (rate(http_requests_total[1m]))
+          > 0.05
+        for: 1m
+        labels:
+          severity: P2
+        annotations:
+          summary: '{{ $labels.system }} 接口错误率超过 5%'
+          description: '当前错误率 {{ $value | humanizePercentage }}'
+
+      - alert: GovAppProbeDown
+        expr: probe_success == 0
+        for: 30s
+        labels:
+          severity: P1
+        annotations:
+          summary: '{{ $labels.system }} 探活失败'
+          description: '{{ $labels.instance }} 无法访问'
+
+  - name: host
+    rules:
+      - alert: HostHighCPU
+        expr: |
+          1 - avg by (system, instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) > 0.85
+        for: 5m
+        labels:
+          severity: P3
+        annotations:
+          summary: '{{ $labels.system }} 主机 CPU 使用率超过 85%'
+          description: '{{ $labels.instance }} 当前 CPU 使用率 {{ $value | humanizePercentage }}'
