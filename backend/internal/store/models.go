@@ -33,6 +33,13 @@ type Host struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+type SlaPolicy struct {
+	Level           int16  `json:"level"`
+	Severity        string `json:"severity"`
+	ResponseMinutes int32  `json:"response_minutes"`
+	ResolveMinutes  int32  `json:"resolve_minutes"`
+}
+
 type SystemDependency struct {
 	SystemID    int64 `json:"system_id"`
 	DependsOnID int64 `json:"depends_on_id"`
