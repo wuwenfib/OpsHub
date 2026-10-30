@@ -60,3 +60,43 @@ export function statusTag(status) {
     }[status] ?? { text: status, type: 'info' }
   )
 }
+
+/** 严重级别 → el-tag 颜色 */
+export function severityType(sev) {
+  return { P1: 'danger', P2: 'warning', P3: 'primary', P4: 'info' }[sev] ?? 'info'
+}
+
+/** 工单流水动作 → 中文 */
+export const actionText = {
+  created: '建单',
+  duplicate_alert: '告警重复推送',
+  alert_resolved: '告警已恢复',
+  ack: '受理',
+  resolve: '标记恢复',
+  close: '确认关闭',
+  reopen: '重开',
+}
+
+/** 每个状态下允许的操作（与后端状态机一致；只用于决定显示哪些按钮，最终以后端校验为准） */
+export const allowedActions = {
+  new: ['ack'],
+  acknowledged: ['resolve'],
+  reopened: ['resolve'],
+  resolved: ['close', 'reopen'],
+  closed: [],
+}
+
+/**
+ * 一个时限的当前状态：
+ *   已完成 → "按时" / "超时 X"
+ *   未完成 → "剩余 X" / "已超时 X"
+ */
+export function deadlinePhase(deadlineISO, doneISO, now = new Date()) {
+  const deadline = new Date(deadlineISO)
+  if (doneISO) {
+    const late = (new Date(doneISO) - deadline) / 60000
+    return late <= 0 ? { text: '按时', type: 'success' } : { text: `超时 ${formatMinutes(late)}`, type: 'danger' }
+  }
+  const left = (deadline - now) / 60000
+  return left >= 0 ? { text: `剩余 ${formatMinutes(left)}`, type: 'warning' } : { text: `已超时 ${formatMinutes(-left)}`, type: 'danger' }
+}

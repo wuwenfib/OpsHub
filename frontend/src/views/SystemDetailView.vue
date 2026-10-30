@@ -114,7 +114,13 @@ const goSystem = (code) => router.push(`/systems/${code}`)
       </el-card>
 
       <el-card shadow="never" :header="`在办工单（${openTickets.length}）`" class="block">
-        <el-table :data="openTickets" size="small" empty-text="没有未关闭的工单">
+        <el-table
+          :data="openTickets"
+          size="small"
+          empty-text="没有未关闭的工单"
+          class="clickable"
+          @row-click="(row) => router.push(`/tickets/${row.id}`)"
+        >
           <el-table-column prop="id" label="#" width="60" />
           <el-table-column label="级别" width="70">
             <template #default="{ row }">{{ row.severity }}</template>
@@ -159,7 +165,8 @@ const goSystem = (code) => router.push(`/systems/${code}`)
   white-space: nowrap;
   color: var(--el-text-color-secondary);
 }
-.dep {
+.dep,
+.clickable :deep(.el-table__row) {
   cursor: pointer;
 }
 .none,

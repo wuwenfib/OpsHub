@@ -18,7 +18,8 @@ async function request(method, path, body) {
   const data = await resp.json().catch(() => null)
   if (!resp.ok) {
     // 后端统一的错误体：{"error": "...", "code": "..."}
-    if (data?.error) throw new ApiError(resp.status, data.code, data.error)
+    // 后端信息形如 "validation failed: level 必须是 1～3"；分类已由 code 表达，界面只显示冒号后的原因
+    if (data?.error) throw new ApiError(resp.status, data.code, data.error.replace(/^[a-z ]+: /, ''))
     // 没有错误体的 502/503/504 通常是代理连不上后端
     const msg = resp.status >= 502 && resp.status <= 504 ? `无法连接后端服务（HTTP ${resp.status}）` : `HTTP ${resp.status}`
     throw new ApiError(resp.status, 'unavailable', msg)
