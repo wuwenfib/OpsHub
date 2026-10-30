@@ -22,6 +22,7 @@ type Deps struct {
 	CMDB    *service.CMDB
 	Alerts  *service.Alerts
 	Tickets *service.Tickets
+	Stats   *service.Stats
 }
 
 func NewRouter(d Deps) *gin.Engine {
@@ -34,6 +35,7 @@ func NewRouter(d Deps) *gin.Engine {
 	cmdbHandler{svc: d.CMDB}.register(apiGroup)
 	alertHandler{svc: d.Alerts}.register(apiGroup)
 	ticketHandler{svc: d.Tickets}.register(apiGroup)
+	statsHandler{svc: d.Stats}.register(apiGroup)
 	return r
 }
 

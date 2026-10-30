@@ -22,11 +22,12 @@ func (h ticketHandler) register(r *gin.RouterGroup) {
 	}
 }
 
-// list 支持 ?status=new&system=GOV-APPLY 筛选。
+// list 支持 ?status=new&system=GOV-APPLY&overdue=true 筛选。
 func (h ticketHandler) list(c *gin.Context) {
 	v, err := h.svc.List(c.Request.Context(), service.ListFilter{
-		Status: c.Query("status"),
-		System: c.Query("system"),
+		Status:  c.Query("status"),
+		System:  c.Query("system"),
+		Overdue: c.Query("overdue") == "true",
 	})
 	respond(c, http.StatusOK, v, err)
 }

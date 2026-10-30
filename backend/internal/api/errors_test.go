@@ -46,3 +46,12 @@ func TestWebhookRejectsBadPayload(t *testing.T) {
 		t.Errorf("status = %d, want 400, body = %s", rec.Code, rec.Body)
 	}
 }
+
+func TestStatsRejectsBadTime(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	NewRouter(Deps{DB: fakePinger{}}).ServeHTTP(rec, httptest.NewRequest("GET", "/api/stats/sla?from=2026-10-30", nil))
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400, body = %s", rec.Code, rec.Body)
+	}
+}

@@ -28,16 +28,24 @@ func NewTickets(st *store.Store, clock Clock) *Tickets {
 // TicketDetail 是工单详情：工单 + 关联系统/厂商名称 + 全部流水。
 type TicketDetail struct {
 	store.GetTicketViewRow
+	SLA  sla.Evaluation    `json:"sla"`
 	Logs []store.TicketLog `json:"logs"`
+}
+
+// TicketListItem 是列表中的一行：工单 + 当前 SLA 状态（前端据此把超时工单标红）。
+type TicketListItem struct {
+	store.ListTicketsRow
+	SLA sla.Evaluation `json:"sla"`
 }
 
 // ListFilter 的字段为空表示不按该项筛选。
 type ListFilter struct {
-	Status string
-	System string
+	Status  string
+	System  string
+	Overdue bool // 只看当前超时的工单
 }
 
-func (s *Tickets) List(ctx context.Context, f ListFilter) ([]store.ListTicketsRow, error) {
+func (s *Tickets) List(ctx context.Context, f ListFilter) ([]TicketListItem, error) {
 	var p store.ListTicketsParams
 	if f.Status != "" {
 		if !validStatus(f.Status) {
@@ -48,7 +56,21 @@ func (s *Tickets) List(ctx context.Context, f ListFilter) ([]store.ListTicketsRo
 	if f.System != "" {
 		p.System = pgtype.Text{String: f.System, Valid: true}
 	}
-	return s.st.ListTickets(ctx, p)
+	rows, err := s.st.ListTickets(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	// 超时判断只在 sla.Evaluate 里定义一次，所以在 Go 里过滤，而不是在 SQL 里再写一遍。
+	now := s.clock.Now()
+	items := make([]TicketListItem, 0, len(rows))
+	for _, r := range rows {
+		e := sla.Evaluate(slaTimes(r.CreatedAt, r.ResponseDeadline, r.ResolveDeadline, r.RespondedAt, r.ResolvedAt, r.Status), now)
+		if f.Overdue && !e.Overdue {
+			continue
+		}
+		items = append(items, TicketListItem{ListTicketsRow: r, SLA: e})
+	}
+	return items, nil
 }
 
 func (s *Tickets) Get(ctx context.Context, id int64) (TicketDetail, error) {
@@ -60,7 +82,8 @@ func (s *Tickets) Get(ctx context.Context, id int64) (TicketDetail, error) {
 	if err != nil {
 		return TicketDetail{}, err
 	}
-	return TicketDetail{GetTicketViewRow: t, Logs: logs}, nil
+	e := sla.Evaluate(slaTimes(t.CreatedAt, t.ResponseDeadline, t.ResolveDeadline, t.RespondedAt, t.ResolvedAt, t.Status), s.clock.Now())
+	return TicketDetail{GetTicketViewRow: t, SLA: e, Logs: logs}, nil
 }
 
 // ActionInput 是状态操作的请求体。没有登录体系，操作人由调用方填写。
