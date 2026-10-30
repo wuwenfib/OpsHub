@@ -1,0 +1,715 @@
+<title>OpsHub 实现手册</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700;900&display=swap">
+<style>
+/* 版式概念：运维手册。左侧固定目录，右侧单栏正文；数字、编码、字段名一律用等宽字，像值班手册里的代号。 */
+:root {
+  --bg: #f4f6f5; --surface: #ffffff; --surface-2: #e9eeec; --fg: #17211f; --muted: #55635f;
+  --line: #d4dcd9; --accent: #0a6b5f; --accent-soft: #d8ece8; --warn: #9a5a08; --warn-soft: #f6ead6;
+  --bad: #b3372f; --code-bg: #eef2f0;
+  --font-body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "IBM Plex Mono", "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111716; --surface: #18201e; --surface-2: #212b29; --fg: #e8eeec; --muted: #a3b1ad;
+  --line: #303c39; --accent: #5ac7b6; --accent-soft: #17352f; --warn: #e3ab5e; --warn-soft: #382a14;
+  --bad: #ee8a81; --code-bg: #1d2624; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #111716; --surface: #18201e; --surface-2: #212b29; --fg: #e8eeec; --muted: #a3b1ad;
+  --line: #303c39; --accent: #5ac7b6; --accent-soft: #17352f; --warn: #e3ab5e; --warn-soft: #382a14;
+  --bad: #ee8a81; --code-bg: #1d2624; color-scheme: dark; }
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { background: var(--bg); color: var(--fg); font: 400 16px/1.8 var(--font-body); }
+.wrap {
+  display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px;
+  max-width: 1160px; margin: 0 auto; padding-block: 40px 80px;
+  padding-left: max(24px, env(safe-area-inset-left, 0px)); padding-right: max(24px, env(safe-area-inset-right, 0px));
+}
+nav { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; max-height: calc(100vh - 48px); overflow-y: auto; font-size: 14px; line-height: 1.5; }
+nav .brand { font: 500 13px var(--font-mono); color: var(--accent); margin-bottom: 12px; }
+nav ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+nav ul ul { padding-left: 12px; margin-block: 2px 8px; }
+nav a { display: block; padding: 3px 8px; color: var(--muted); text-decoration: none; border-radius: 4px; }
+nav > ul > li > a { color: var(--fg); font-weight: 500; }
+nav a:hover, nav a:focus-visible { background: var(--surface-2); color: var(--fg); }
+main { min-width: 0; }
+section { scroll-margin-top: 24px; }
+h1, h2, h3, h4 { text-wrap: balance; line-height: 1.35; margin: 0; scroll-margin-top: 24px; }
+h1 { font-size: clamp(32px, 5vw, 46px); font-weight: 900; }
+h2 { font-size: 27px; font-weight: 700; margin-top: 64px; padding-top: 22px; border-top: 2px solid var(--fg); }
+h3 { font-size: 20px; font-weight: 700; margin-top: 38px; }
+h4 { font-size: 16px; font-weight: 700; margin-top: 24px; }
+p, ul, ol { margin: 12px 0 0; max-width: 72ch; }
+ul, ol { padding-left: 22px; }
+li + li { margin-top: 4px; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lede { font-size: 18px; color: var(--muted); margin-top: 14px; }
+code { font: 400 .88em var(--font-mono); background: var(--code-bg); padding: .1em .35em; border-radius: 3px; overflow-wrap: anywhere; }
+pre { margin: 14px 0 0; padding: 14px 16px; background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; font: 400 13.5px/1.65 var(--font-mono); }
+pre code { background: none; padding: 0; font-size: inherit; overflow-wrap: normal; }
+.cmt { color: var(--muted); }
+.file { font: 500 12.5px var(--font-mono); color: var(--muted); margin: 18px 0 -8px; }
+.table { margin-top: 14px; overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; line-height: 1.6; }
+th, td { padding: 8px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+th { background: var(--surface-2); font-weight: 500; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td code { white-space: nowrap; }
+td.wrap-code code { white-space: normal; }
+.num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--font-mono); white-space: nowrap; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; margin-top: 26px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.facts div { background: var(--surface); padding: 14px 16px; }
+.facts b { display: block; font: 500 24px/1.2 var(--font-mono); }
+.facts span { font-size: 13px; color: var(--muted); }
+.diagram { margin-top: 14px; padding: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; }
+.diagram pre { margin: 0; padding: 0; border: 0; background: none; font-family: var(--font-body); }
+.layers { display: grid; gap: 8px; margin-top: 14px; }
+.layer { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 14px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; font-size: 14.5px; }
+.layer b { font-weight: 700; }
+.layer.mine { border-color: var(--accent); background: var(--accent-soft); }
+.note { margin-top: 16px; padding: 12px 16px; background: var(--warn-soft); border-radius: 6px; font-size: 15px; max-width: 72ch; }
+.note b { color: var(--warn); }
+.step { margin-top: 34px; }
+.step-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.step-head .id { font: 500 14px var(--font-mono); color: var(--accent); background: var(--accent-soft); padding: 1px 8px; border-radius: 4px; }
+.step-head h3 { margin: 0; }
+.tag { font: 500 12px var(--font-mono); color: var(--muted); }
+@media (max-width: 900px) {
+  .wrap { grid-template-columns: minmax(0, 1fr); gap: 20px; padding-block: 24px 56px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  nav { position: static; max-height: none; padding: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+  nav ul ul { display: none; }
+  nav > ul { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .layer { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}
+</style>
+
+<div class="wrap">
+<nav aria-label="目录">
+  <div class="brand">OPSHUB / 实现手册</div>
+  <ul>
+    <li><a href="#overview">项目概览</a></li>
+    <li><a href="#arch">整体架构</a></li>
+    <li><a href="#backend">后端实现</a>
+      <ul>
+        <li><a href="#layers">分层与代码组织</a></li>
+        <li><a href="#process">实现过程</a></li>
+        <li><a href="#alertflow">告警到工单</a></li>
+        <li><a href="#fsm">工单状态机</a></li>
+        <li><a href="#slacalc">SLA 计算</a></li>
+        <li><a href="#errors">错误处理</a></li>
+        <li><a href="#testing">测试策略</a></li>
+        <li><a href="#api">API 列表</a></li>
+      </ul>
+    </li>
+    <li><a href="#schema">表结构设计</a>
+      <ul>
+        <li><a href="#er">关系总览</a></li>
+        <li><a href="#tables">各表字段</a></li>
+        <li><a href="#decisions">设计取舍</a></li>
+      </ul>
+    </li>
+    <li><a href="#monitoring">监控侧</a></li>
+    <li><a href="#frontend">前端</a></li>
+    <li><a href="#run">运行与演示</a></li>
+    <li><a href="#limits">已知简化</a></li>
+  </ul>
+</nav>
+
+<main>
+<section id="overview">
+  <h1>OpsHub 实现手册</h1>
+  <p class="lede">一个小型 IT 运维管理平台，用来跑通政企运维的核心链路：系统出故障，监控自动发现，生成带 SLA 时限的工单并找到责任厂商，厂商按流程处理，考核数据自动更新。</p>
+  <p>项目背景是 200 个左右的业务系统从各厂商划转过来后的管理问题：台账怎么建、告警怎么变成任务、怎么用数据考核外包厂商。这是学习型 Demo，目标是能一键拉起、现场演示，并且能讲清楚每一层为什么这样设计。</p>
+  <div class="facts">
+    <div><b>15 / 15</b><span>前三阶段任务完成（第四阶段 AI 助手可选，未做）</span></div>
+    <div><b>≈2000</b><span>后端手写 Go 代码行数</span></div>
+    <div><b>≈1250</b><span>sqlc 生成的 Go 代码行数</span></div>
+    <div><b>≈1500</b><span>后端测试代码行数</span></div>
+    <div><b>8</b><span>业务表（3 个迁移文件）</span></div>
+    <div><b>93 秒</b><span>实测：注入故障到自动建单</span></div>
+  </div>
+</section>
+
+<section id="arch">
+  <h2>整体架构</h2>
+  <p>原则只有一条：采集、存储、告警计算全部用开源组件，自己只写"管理"那部分。下面绿色的两层是自己写的。</p>
+  <div class="layers">
+    <div class="layer"><b>被管对象层</b><div><code>mock-gov-app</code>（Go，模拟政务系统，暴露 <code>/metrics</code>，可注入慢、报错、宕机）和 MySQL（被监控的业务库）</div></div>
+    <div class="layer"><b>工具层</b><div><code>node_exporter</code>、<code>mysqld_exporter</code>、<code>blackbox_exporter</code> → Prometheus（存储、告警规则）→ Alertmanager（分组、抑制、路由）；Grafana 看图</div></div>
+    <div class="layer mine"><b>流程层</b><div>OpsHub 后端（Go 单体 + PostgreSQL 16）：CMDB、告警接入、工单状态机、SLA 计时与统计。入口是 Alertmanager 的 webhook</div></div>
+    <div class="layer mine"><b>展示层</b><div>OpsHub 前端（Vue3 + Element Plus + ECharts）：系统台账、工单、SLA 看板，只消费 REST API</div></div>
+  </div>
+  <p>两个数据库职责不同：MySQL 只是"被看的对象"，PostgreSQL 是"平台自己的账本"，两者互不相干。</p>
+  <div class="table"><table>
+    <tr><th>服务</th><th>端口</th><th>说明</th></tr>
+    <tr><td>opshub 后端</td><td class="num">8080</td><td>REST API 与 webhook</td></tr>
+    <tr><td>前端 dev</td><td class="num">5173</td><td>Vite 开发服务器，<code>/api</code> 代理到 8080，后端不处理 CORS</td></tr>
+    <tr><td>Prometheus</td><td class="num">9090</td><td>抓取间隔、规则评估间隔都是 15 秒</td></tr>
+    <tr><td>Alertmanager</td><td class="num">9093</td><td>webhook 指向 <code>http://opshub:8080/api/alerts/webhook</code></td></tr>
+    <tr><td>Grafana</td><td class="num">3000</td><td>端口冲突时在 <code>deploy/.env</code> 设 <code>GRAFANA_PORT</code></td></tr>
+    <tr><td>mock-gov-app</td><td class="num">8081</td><td>自带流量发生器，默认每秒 5 个请求</td></tr>
+    <tr><td>PostgreSQL</td><td class="num">5432</td><td>主库 <code>opshub</code>，集成测试库 <code>opshub_test</code></td></tr>
+  </table></div>
+</section>
+
+<section id="backend">
+  <h2>后端实现</h2>
+
+  <h3 id="layers">分层与代码组织</h3>
+  <p>后端的核心设计是把<strong>判断逻辑</strong>和<strong>读写数据库</strong>分开。状态机怎么转、截止时间怎么算、告警该建单还是记日志，都是不碰数据库的纯函数，用表驱动测试就能覆盖全部分支；事务和 SQL 集中在 service 和 store 两层。依赖方向只能从上往下。</p>
+<pre><code>api/        gin handler：解析请求 → 调 service → 错误映射为 HTTP 状态码
+service/    用例编排：开事务 → 调纯逻辑 → 读写库
+cmdb/  ticket/  sla/  alert/    纯领域逻辑，零 IO，可单测
+store/      手写 SQL + sqlc 生成的查询函数 + 事务封装
+apperr/     跨层共用的哨兵错误（最底层，谁都能引用）</code></pre>
+  <div class="table"><table>
+    <tr><th>包</th><th>行数</th><th>职责</th><th>关键内容</th></tr>
+    <tr><td><code>cmd/opshub</code></td><td class="num">78</td><td>进程入口</td><td>连库 → 迁移 → 组装依赖 → 启动 HTTP → 收到 SIGTERM 优雅退出</td></tr>
+    <tr><td><code>internal/api</code></td><td class="num">443</td><td>HTTP 层</td><td>路由、handler，<code>writeError</code> 是唯一的错误出口</td></tr>
+    <tr><td><code>internal/service</code></td><td class="num">777</td><td>用例编排</td><td><code>CMDB</code>、<code>Alerts</code>、<code>Tickets</code>、<code>Stats</code>，<code>Clock</code> 接口</td></tr>
+    <tr><td><code>internal/alert</code></td><td class="num">108</td><td>纯逻辑</td><td><code>Parse</code> 解析 payload，<code>Decide</code> 决定动作</td></tr>
+    <tr><td><code>internal/ticket</code></td><td class="num">109</td><td>纯逻辑</td><td><code>Transition</code> 状态表，<code>Apply</code> 计算字段变化</td></tr>
+    <tr><td><code>internal/sla</code></td><td class="num">195</td><td>纯逻辑</td><td><code>DeadlinesFrom</code>、<code>Evaluate</code>、<code>Aggregate</code></td></tr>
+    <tr><td><code>internal/cmdb</code></td><td class="num">150</td><td>纯逻辑</td><td>输入规范化与校验（编码格式、等级、IP）</td></tr>
+    <tr><td><code>internal/store</code></td><td class="num">138</td><td>数据访问</td><td><code>Connect</code>、<code>Migrate</code>、<code>InTx</code>、<code>MapError</code>（另有 1246 行生成代码）</td></tr>
+    <tr><td><code>internal/apperr</code></td><td class="num">12</td><td>错误定义</td><td>4 个哨兵错误</td></tr>
+  </table></div>
+  <p>数据访问用 <strong>sqlc + pgx</strong>：在 <code>queries/*.sql</code> 里手写 SQL，sqlc 读取迁移文件得到表结构，生成带类型的 Go 函数。SQL 写错列名时，生成代码这一步就会报错。没有选 ORM，是因为隐式生成的 SQL 出问题时很难看清发生了什么。</p>
+<div class="file">internal/store/queries/ticket.sql</div>
+<pre><code><span class="cmt">-- name: GetTicketForUpdate :one</span>
+SELECT * FROM ticket WHERE id = $1 FOR UPDATE;</code></pre>
+  <p>事务封装只有几行。传入的函数正常返回就提交，返回错误或发生 panic 就回滚，调用方不可能忘记回滚，作用类似 C++ 的 RAII 事务守卫。</p>
+<div class="file">internal/store/store.go</div>
+<pre><code>func (s *Store) InTx(ctx context.Context, fn func(q *Queries) error) error {
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		return fn(s.Queries.WithTx(tx))
+	})
+}</code></pre>
+
+  <h3 id="process">实现过程</h3>
+  <p>后端按 6 个任务小步推进，每个任务一个 commit，每一步都先验证再打勾。</p>
+
+  <div class="step">
+    <div class="step-head"><span class="id">2.1</span><h3>后端骨架</h3></div>
+    <p>先立起能启动、能连库、能自动迁移的空架子。启动顺序是连库（每秒重试，最多 30 次）→ 执行迁移 → 对外服务。迁移 SQL 通过 <code>go:embed</code> 编进二进制，运行镜像是 <code>scratch</code>，里面只有一个可执行文件。</p>
+<div class="file">cmd/opshub/main.go</div>
+<pre><code>pool, err := store.Connect(ctx, dbURL)    <span class="cmt">// 带重试，等数据库就绪</span>
+if err := store.Migrate(dbURL); err != nil { ... }
+
+st := store.NewStore(pool)
+router := api.NewRouter(api.Deps{
+	DB:      pool,
+	CMDB:    service.NewCMDB(st),
+	Alerts:  service.NewAlerts(st, service.RealClock{}),
+	Tickets: service.NewTickets(st, service.RealClock{}),
+	Stats:   service.NewStats(st, service.RealClock{}),
+})</code></pre>
+    <p>健康检查只依赖一个接口 <code>Pinger</code>，数据库不可达时返回 503。<code>*pgxpool.Pool</code> 不用声明就自动满足它，单测里传一个假实现即可。</p>
+    <p><strong>验证：</strong>空库从零迁移成功；重复执行不报错；停掉 PostgreSQL 后 <code>healthz</code> 返回 503，恢复后连接池自动重连回到 200。</p>
+  </div>
+
+  <div class="step">
+    <div class="step-head"><span class="id">2.2</span><h3>CMDB 增删改查</h3></div>
+    <p>建立厂商、系统、主机及其关系的接口。系统编码格式收得很紧（大写字母开头，只含大写字母、数字、连字符，2～32 位），因为它要和告警的 <code>system</code> 标签逐字相等。IP 用 <code>netip.ParseAddr</code> 规范化，避免同一地址的不同写法绕过唯一约束。</p>
+    <p>"整体替换关系"接口在一个事务里先清空再插入，中途失败就整个回滚。依赖编码不存在时，报错会列出具体是哪几个。</p>
+<div class="file">internal/service/cmdb.go（节选）</div>
+<pre><code>n, err := q.AddSystemDependencies(ctx, params)
+...
+if int(n) != len(codes) { <span class="cmt">// 有编码没匹配上：报给调用方，事务回滚</span>
+	return fmt.Errorf("%w: 依赖的系统不存在: %s", apperr.ErrValidation,
+		strings.Join(missing(codes, detail.DependsOn), ", "))
+}</code></pre>
+    <p><strong>验证：</strong><code>GET /api/systems/GOV-APPLY</code> 一次返回厂商、3 台主机和上下游依赖；集成测试确认替换失败后原关系不变。</p>
+  </div>
+
+  <div class="step">
+    <div class="step-head"><span class="id">2.3</span><h3>SLA 策略</h3></div>
+    <p>12 行策略放在迁移里，它们是系统运行的前提。<code>sla</code> 包只做纯计算，查询函数接收 <code>*store.Queries</code>，这样既能走连接池，也能和建单放进同一个事务。</p>
+<div class="file">internal/sla/sla.go</div>
+<pre><code>func (p Policy) DeadlinesFrom(createdAt time.Time) Deadlines {
+	start := createdAt.UTC()
+	return Deadlines{Response: start.Add(p.Response), Resolve: start.Add(p.Resolve)}
+}</code></pre>
+    <p><strong>验证：</strong>集成测试逐条核对 12 行策略；主库在有数据的情况下从 version 1 增量升级到 version 2，原有数据保留。</p>
+  </div>
+
+  <div class="step">
+    <div class="step-head"><span class="id">2.4</span><h3>Alertmanager webhook 接入</h3></div>
+    <p>这是整条链路的核心，详见下文<a href="#alertflow">告警到工单</a>。除 payload 无法解析（400）外一律返回 200，响应体带处理统计，避免 Alertmanager 整批重试。</p>
+    <p><strong>验证：</strong><code>make chaos-error</code> 后第 96 秒自动生成 P2 单，关联到 GOV-APPLY 和星河软件；重放真实告警不重复建单；<code>chaos-reset</code> 后第 95 秒收到恢复通知，工单状态不变。</p>
+  </div>
+
+  <div class="step">
+    <div class="step-head"><span class="id">2.5</span><h3>工单状态机与流水</h3></div>
+    <p>实现受理、恢复、关闭、重开四个操作，每次变化写流水，非法跳转返回 409。顺带完成手工建单和按状态、按系统筛选。详见<a href="#fsm">工单状态机</a>。</p>
+    <p><strong>验证：</strong>5 种状态 × 4 种动作共 20 种组合全部有表驱动测试；20 个并发的关闭和重开恰好 1 个成功。</p>
+  </div>
+
+  <div class="step">
+    <div class="step-head"><span class="id">2.6</span><h3>SLA 统计接口</h3></div>
+    <p><code>GET /api/stats/sla</code> 按系统或厂商统计。先用 SQL 取出时间范围内的事件单，再在 Go 里用纯函数汇总，这样能直接用手算案例写单测。工单详情和列表也带上 SLA 状态，支持 <code>overdue=true</code> 筛选。详见<a href="#slacalc">SLA 计算</a>。</p>
+    <p><strong>验证：</strong>制造真实故障后，用独立的 Python 脚本只读原始时间字段重新计算，和接口逐项对比，0 处不一致。</p>
+  </div>
+
+  <h3 id="alertflow">告警到工单</h3>
+  <p>Alertmanager 一次推送可能带多条告警，每条告警一个独立事务，一条失败只记日志，不影响同批其他告警。</p>
+  <div class="diagram"><pre class="mermaid">
+sequenceDiagram
+    participant AM as Alertmanager
+    participant API as api
+    participant A as alert 纯逻辑
+    participant S as service.Alerts
+    participant DB as PostgreSQL
+    AM->>API: POST /api/alerts/webhook
+    API->>A: Parse 解析请求体
+    A-->>API: Payload 或 400
+    loop 每条告警一个事务
+        API->>S: handleOne
+        S->>DB: 按 fingerprint 查未关闭工单
+        S->>A: Decide 决定动作
+        alt firing 且无工单
+            S->>DB: 查 CMDB 和 SLA 策略
+            S->>DB: INSERT ON CONFLICT DO NOTHING
+            S->>DB: 写 created 流水
+        else firing 且有工单
+            S->>DB: 写 duplicate_alert 流水
+        else resolved 且有工单
+            S->>DB: 写 alert_resolved 流水，不关单
+        else resolved 且无工单
+            S-->>API: 忽略
+        end
+    end
+    API-->>AM: 200 和处理统计
+  </pre></div>
+  <p>决策本身是一个纯函数：</p>
+<div class="file">internal/alert/alert.go</div>
+<pre><code>func Decide(a Alert, hasOpenTicket bool) Action {
+	switch {
+	case a.Status == StatusFiring &amp;&amp; !hasOpenTicket:
+		return CreateTicket
+	case a.Status == StatusFiring:
+		return AppendDuplicate
+	case hasOpenTicket:
+		return AppendRecovered
+	default:
+		return Ignore
+	}
+}</code></pre>
+  <h4>并发去重</h4>
+  <p>"先查有没有，没有再插入"在并发下有竞态：两个请求可能都查到"没有"，然后各建一张单。所以把"同一指纹最多一张未关闭工单"这条不变量交给数据库保证，思路和用 CAS 取代先读后写一样。</p>
+<div class="file">migrations/000003_ticket.up.sql 与 queries/ticket.sql</div>
+<pre><code>CREATE UNIQUE INDEX ticket_open_fingerprint_uq
+    ON ticket (alert_fingerprint) WHERE status &lt;&gt; 'closed';
+
+INSERT INTO ticket (...) VALUES (...)
+ON CONFLICT (alert_fingerprint) WHERE status &lt;&gt; 'closed' DO NOTHING
+RETURNING *;</code></pre>
+  <p>冲突时 <code>RETURNING</code> 不返回行，sqlc 生成的函数得到 <code>pgx.ErrNoRows</code>。代码据此退回"追加重复日志"分支：</p>
+<div class="file">internal/service/alert.go</div>
+<pre><code>created, err := s.createTicket(ctx, q, a, now)
+if err != nil {
+	return err
+}
+if created {
+	return nil
+}
+<span class="cmt">// 并发冲突：另一个请求刚为同一指纹建了单。按"重复告警"处理。</span>
+act = alert.AppendDuplicate
+if open, err = q.GetOpenTicketByFingerprint(ctx, fingerprint); err != nil {
+	return err
+}
+return appendLog(ctx, q, open.ID, "duplicate_alert", duplicateNote(a), now)</code></pre>
+  <p>索引只覆盖未关闭的工单，所以关单后同一告警再次触发会新建工单：一张单就是一次故障，统计口径最清楚。</p>
+  <h4>建单时的默认口径</h4>
+  <ul>
+    <li><code>system</code> 关联不上 CMDB：<code>system_id</code> 为 NULL，原始值存入 <code>system_label</code>，按二级系统计算 SLA，并写入流水。</li>
+    <li><code>severity</code> 缺失或非法：按 P3 处理，并写入流水。</li>
+    <li>工单标题优先用规则的 <code>summary</code> 注解，没有就用"告警名 [系统]"。</li>
+  </ul>
+
+  <h3 id="fsm">工单状态机</h3>
+  <p>只实现事件单（incident）的状态机。问题单和变更单可以手工创建，但不能流转。</p>
+  <div class="diagram"><pre class="mermaid">
+stateDiagram-v2
+    [*] --> new: 建单
+    new --> acknowledged: ack 受理
+    acknowledged --> resolved: resolve 标记恢复
+    resolved --> closed: close 确认关闭
+    resolved --> reopened: reopen 重开
+    reopened --> resolved: resolve 标记恢复
+    closed --> [*]
+  </pre></div>
+  <p>状态机就是一张查找表，表里没有的组合都是非法跳转。new 不能直接跳到 resolve，因为 SLA 要单独考核响应这一步。</p>
+<div class="file">internal/ticket/ticket.go</div>
+<pre><code>var transitions = map[Status]map[Action]Status{
+	New:          {Ack: Acknowledged},
+	Acknowledged: {Resolve: Resolved},
+	Reopened:     {Resolve: Resolved},
+	Resolved:     {Close: Closed, Reopen: Reopened},
+}
+
+func Apply(s Snapshot, act Action, operator string, now time.Time) (Snapshot, error) {
+	...
+	switch act {
+	case Ack:
+		out.RespondedAt = &amp;now <span class="cmt">// 响应时间 = 受理时间，用于考核响应 SLA</span>
+		out.Assignee = operator
+	case Resolve:
+		out.ResolvedAt = &amp;now
+	case Close:
+		out.ClosedAt = &amp;now
+	case Reopen:
+		out.ResolvedAt = nil   <span class="cmt">// 没修好：清空恢复时间，以最后一次恢复为准</span>
+	}
+	return out, nil
+}</code></pre>
+  <p>service 层把它们串进一个事务：先用 <code>SELECT ... FOR UPDATE</code> 锁住这一行，再判断和写入。两个人同时操作时会排队，后到的看到的是新状态。</p>
+<div class="file">internal/service/ticket.go</div>
+<pre><code>err := s.st.InTx(ctx, func(q *store.Queries) error {
+	cur, err := q.GetTicketForUpdate(ctx, id)      <span class="cmt">// 锁行</span>
+	...
+	next, err := ticket.Apply(snapshotOf(cur), act, operator, now)  <span class="cmt">// 纯逻辑</span>
+	...
+	q.UpdateTicketState(ctx, ...)                  <span class="cmt">// 写回</span>
+	return q.InsertTicketLog(ctx, ...)             <span class="cmt">// 记流水</span>
+})</code></pre>
+
+  <h3 id="slacalc">SLA 计算</h3>
+  <p>建单时就把两个截止时间写进工单，之后修改策略也不影响已有工单的考核口径。判断是否超时只需要比较当前时间和截止时间，不需要定时任务。</p>
+  <p>"是否达标、是否超时"只在 <code>sla.Evaluate</code> 里定义一次，统计、详情、超时筛选都调用它。每个时限只有三种结果：</p>
+<div class="file">internal/sla/sla.go</div>
+<pre><code>func judge(doneAt *time.Time, deadline, now time.Time) (met *bool, overdue bool) {
+	switch {
+	case doneAt != nil:
+		ok := !doneAt.After(deadline)
+		return &amp;ok, false
+	case now.After(deadline):
+		no := false
+		return &amp;no, true    <span class="cmt">// 还没做完但已过期：确定违约</span>
+	default:
+		return nil, false   <span class="cmt">// 还没做完也没过期：待定</span>
+	}
+}</code></pre>
+  <div class="table"><table>
+    <tr><th>指标</th><th>算法</th></tr>
+    <tr><td>故障数</td><td>时间范围 <code>[from, to)</code> 内创建的事件单数量</td></tr>
+    <tr><td>MTTR</td><td>已恢复工单 <code>resolved_at - created_at</code> 的平均值，单位分钟</td></tr>
+    <tr><td>响应达标率</td><td>达标数 ÷ 已有结论的工单数。待定的单不计入分母</td></tr>
+    <tr><td>恢复达标率</td><td>同上，看最后一次 <code>resolved_at</code>。重开会清空它，所以假修好会被如实计入</td></tr>
+    <tr><td>当前超时数</td><td>现在仍未响应且已过响应截止，或仍未恢复且已过恢复截止</td></tr>
+  </table></div>
+  <p>分母为 0 时比率返回 <code>null</code>，表示"还没有结论"，和 0% 的"全部违约"区分开。当前实现在 Go 里汇总，到几十万张工单的规模时应改为 SQL <code>GROUP BY</code>。</p>
+
+  <h3 id="errors">错误处理</h3>
+  <p>Go 的错误是普通返回值。领域层用 <code>%w</code> 包装 4 个哨兵错误，错误信息带具体原因，同时保留类型；api 层用 <code>errors.Is</code> 统一翻译，中间包了几层都能识别。500 的详情只写日志，不返回给客户端。</p>
+<div class="file">internal/api/errors.go</div>
+<pre><code>func statusOf(err error) (int, string) {
+	switch {
+	case errors.Is(err, apperr.ErrNotFound):
+		return http.StatusNotFound, "not_found"
+	case errors.Is(err, apperr.ErrValidation):
+		return http.StatusBadRequest, "validation"
+	case errors.Is(err, apperr.ErrConflict):
+		return http.StatusConflict, "conflict"
+	case errors.Is(err, apperr.ErrInvalidTransition):
+		return http.StatusConflict, "invalid_transition"
+	default:
+		return http.StatusInternalServerError, "internal"
+	}
+}</code></pre>
+  <p>数据库错误由 <code>store.MapError</code> 翻译：无行 → NotFound，唯一约束（23505）→ Conflict，外键（23503）和 CHECK（23514）→ Validation。错误体统一为 <code>{"error": "...", "code": "..."}</code>。</p>
+
+  <h3 id="testing">测试策略</h3>
+  <div class="table"><table>
+    <tr><th>层</th><th>命令</th><th>覆盖内容</th></tr>
+    <tr><td>纯逻辑单测</td><td><code>make test</code></td><td>状态机 20 种组合、截止时间、手算案例的统计、告警决策、payload 解析、输入校验、告警规则（promtool）</td></tr>
+    <tr><td>集成测试</td><td><code>make test-integration</code></td><td>连真实 PostgreSQL 的 <code>opshub_test</code>：建单、去重、流转、事务回滚、统计、并发</td></tr>
+    <tr><td>端到端</td><td>手动</td><td>真实故障注入，按 PLAN 验收标准检查</td></tr>
+  </table></div>
+  <p>时间通过 <code>Clock</code> 接口注入，测试传固定时钟，能精确断言截止时间。构建标签 <code>//go:build integration</code> 把集成测试隔离开，作用类似 <code>#ifdef</code>。</p>
+  <h4>验证测试本身有效</h4>
+  <p>并发测试最初是假的。我把 <code>FOR UPDATE</code> 去掉后测试照样通过，查下来有两个原因：goroutine 启动有先后；连接池是懒创建的，新建连接要几毫秒，比事务本身还慢，请求被"等连接"这一步无意中串行化了。修法是加起跑线 channel，并在起跑前预热连接池。</p>
+  <div class="table"><table>
+    <tr><th>场景</th><th>没有保护</th><th>有保护</th></tr>
+    <tr><td>20 个并发的关闭和重开</td><td>去掉行锁：16 个"成功"，数据被改乱</td><td>恰好 1 个成功，19 个返回 409</td></tr>
+    <tr><td>20 个并发推送同一告警</td><td>—</td><td>只建 1 张单，每次约 15 个请求真正撞上唯一索引</td></tr>
+  </table></div>
+
+  <h3 id="api">API 列表</h3>
+  <p>统一 <code>/api</code> 前缀，JSON，时间为 RFC3339 UTC。</p>
+  <div class="table"><table>
+    <tr><th>接口</th><th>说明</th></tr>
+    <tr><td><code>GET /healthz</code></td><td>存活检查，含数据库连通性</td></tr>
+    <tr><td><code>GET POST /api/vendors</code><br><code>GET PUT DELETE /api/vendors/:id</code></td><td>厂商。删除后其系统的 <code>vendor_id</code> 置空</td></tr>
+    <tr><td><code>GET POST /api/systems</code><br><code>GET PUT DELETE /api/systems/:code</code></td><td>业务系统。详情含厂商、主机、<code>depends_on</code>、<code>depended_by</code>。编码不可修改</td></tr>
+    <tr><td><code>PUT /api/systems/:code/hosts</code></td><td>整体替换部署主机，请求体 <code>{"host_ids": [...]}</code></td></tr>
+    <tr><td><code>PUT /api/systems/:code/dependencies</code></td><td>整体替换依赖，请求体 <code>{"depends_on": [...]}</code></td></tr>
+    <tr><td><code>GET POST /api/hosts</code><br><code>PUT DELETE /api/hosts/:id</code></td><td>主机</td></tr>
+    <tr><td><code>POST /api/alerts/webhook</code></td><td>Alertmanager 接入，返回处理统计</td></tr>
+    <tr><td><code>GET /api/tickets</code></td><td>工单列表，支持 <code>status</code>、<code>system</code>、<code>overdue=true</code>，带 SLA 状态</td></tr>
+    <tr><td><code>POST /api/tickets</code></td><td>手工建单，必须关联已登记的系统</td></tr>
+    <tr><td><code>GET /api/tickets/:id</code></td><td>详情 + 流水 + SLA 状态</td></tr>
+    <tr><td><code>POST /api/tickets/:id/ack</code><br><code>.../resolve</code> <code>.../close</code> <code>.../reopen</code></td><td>状态操作，请求体 <code>{"operator": "...", "note": "..."}</code>，非法跳转返回 409</td></tr>
+    <tr><td><code>GET /api/stats/sla</code></td><td>参数 <code>group_by=system|vendor</code>、<code>from</code>、<code>to</code>。默认按系统、最近 30 天</td></tr>
+  </table></div>
+</section>
+
+<section id="schema">
+  <h2>表结构设计</h2>
+  <p>8 张业务表分属 3 个迁移文件，随任务逐步加入。golang-migrate 另外维护一张 <code>schema_migrations</code> 记录当前版本。</p>
+  <div class="table"><table>
+    <tr><th>迁移</th><th>内容</th><th>加入时机</th></tr>
+    <tr><td><code>000001_cmdb</code></td><td><code>vendor</code>、<code>business_system</code>、<code>host</code>、<code>system_host</code>、<code>system_dependency</code></td><td>2.1</td></tr>
+    <tr><td><code>000002_sla_policy</code></td><td><code>sla_policy</code> 和 12 行策略</td><td>2.3</td></tr>
+    <tr><td><code>000003_ticket</code></td><td><code>ticket</code>、<code>ticket_log</code>、部分唯一索引</td><td>2.4</td></tr>
+  </table></div>
+
+  <h3 id="er">关系总览</h3>
+  <p><code>sla_policy</code> 和其他表没有外键：建单时按"系统等级 × 严重级别"查一次，把结果写成工单上的截止时间。</p>
+  <div class="diagram"><pre class="mermaid">
+erDiagram
+    vendor ||--o{ business_system : "负责"
+    business_system ||--o{ system_host : "部署于"
+    host ||--o{ system_host : "运行"
+    business_system ||--o{ system_dependency : "依赖方"
+    business_system ||--o{ system_dependency : "被依赖方"
+    business_system |o--o{ ticket : "关联"
+    ticket ||--o{ ticket_log : "流水"
+    vendor {
+        bigint id PK
+        text name UK
+        date contract_end
+    }
+    business_system {
+        bigint id PK
+        text code UK
+        smallint level
+        bigint vendor_id FK
+    }
+    host {
+        bigint id PK
+        text ip UK
+        text env
+    }
+    system_host {
+        bigint system_id PK
+        bigint host_id PK
+    }
+    system_dependency {
+        bigint system_id PK
+        bigint depends_on_id PK
+    }
+    sla_policy {
+        smallint level PK
+        text severity PK
+        int response_minutes
+        int resolve_minutes
+    }
+    ticket {
+        bigint id PK
+        bigint system_id FK
+        text severity
+        text status
+        text alert_fingerprint
+        timestamptz response_deadline
+        timestamptz resolve_deadline
+    }
+    ticket_log {
+        bigint id PK
+        bigint ticket_id FK
+        text action
+    }
+  </pre></div>
+
+  <h3 id="tables">各表字段</h3>
+  <p>所有 <code>id</code> 都是 <code>BIGINT GENERATED ALWAYS AS IDENTITY</code> 主键，时间列都是 <code>TIMESTAMPTZ</code>，按 UTC 写入。</p>
+
+  <h4><code>vendor</code> 厂商</h4>
+  <div class="table"><table>
+    <tr><th>字段</th><th>类型</th><th>约束</th><th>说明</th></tr>
+    <tr><td><code>id</code></td><td><code>BIGINT</code></td><td>主键</td><td></td></tr>
+    <tr><td><code>name</code></td><td><code>TEXT</code></td><td>非空，唯一</td><td>厂商名称</td></tr>
+    <tr><td><code>contact</code></td><td><code>TEXT</code></td><td>非空，默认空串</td><td>联系人</td></tr>
+    <tr><td><code>phone</code></td><td><code>TEXT</code></td><td>非空，默认空串</td><td>电话</td></tr>
+    <tr><td><code>contract_end</code></td><td><code>DATE</code></td><td>可空</td><td>合同到期日，前端据此做到期提醒</td></tr>
+    <tr><td><code>created_at</code> <code>updated_at</code></td><td><code>TIMESTAMPTZ</code></td><td>非空，默认 now()</td><td></td></tr>
+  </table></div>
+
+  <h4><code>business_system</code> 业务系统</h4>
+  <div class="table"><table>
+    <tr><th>字段</th><th>类型</th><th>约束</th><th>说明</th></tr>
+    <tr><td><code>id</code></td><td><code>BIGINT</code></td><td>主键</td><td></td></tr>
+    <tr><td><code>code</code></td><td><code>TEXT</code></td><td>非空，唯一</td><td>与告警 <code>system</code> 标签逐字相等，是告警关联的键</td></tr>
+    <tr><td><code>name</code></td><td><code>TEXT</code></td><td>非空</td><td>系统名称</td></tr>
+    <tr><td><code>department</code></td><td><code>TEXT</code></td><td>非空，默认空串</td><td>所属部门</td></tr>
+    <tr><td><code>level</code></td><td><code>SMALLINT</code></td><td>非空，CHECK 1～3</td><td>重要等级，1 最高，决定 SLA</td></tr>
+    <tr><td><code>vendor_id</code></td><td><code>BIGINT</code></td><td>外键，<code>ON DELETE SET NULL</code></td><td>负责厂商</td></tr>
+    <tr><td><code>owner</code></td><td><code>TEXT</code></td><td>非空，默认空串</td><td>负责人</td></tr>
+    <tr><td><code>description</code></td><td><code>TEXT</code></td><td>非空，默认空串</td><td>说明</td></tr>
+    <tr><td><code>created_at</code> <code>updated_at</code></td><td><code>TIMESTAMPTZ</code></td><td>非空，默认 now()</td><td></td></tr>
+  </table></div>
+
+  <h4><code>host</code> 主机</h4>
+  <div class="table"><table>
+    <tr><th>字段</th><th>类型</th><th>约束</th><th>说明</th></tr>
+    <tr><td><code>id</code></td><td><code>BIGINT</code></td><td>主键</td><td></td></tr>
+    <tr><td><code>ip</code></td><td><code>TEXT</code></td><td>非空，唯一</td><td>Go 层校验并规范化后存储</td></tr>
+    <tr><td><code>hostname</code></td><td><code>TEXT</code></td><td>非空</td><td>主机名</td></tr>
+    <tr><td><code>os</code></td><td><code>TEXT</code></td><td>非空，默认空串</td><td>操作系统</td></tr>
+    <tr><td><code>env</code></td><td><code>TEXT</code></td><td>非空，CHECK <code>prod</code> / <code>test</code></td><td>环境</td></tr>
+    <tr><td><code>created_at</code> <code>updated_at</code></td><td><code>TIMESTAMPTZ</code></td><td>非空，默认 now()</td><td></td></tr>
+  </table></div>
+
+  <h4><code>system_host</code> 系统与主机（多对多）</h4>
+  <div class="table"><table>
+    <tr><th>字段</th><th>类型</th><th>约束</th><th>说明</th></tr>
+    <tr><td><code>system_id</code></td><td><code>BIGINT</code></td><td>联合主键，外键，级联删除</td><td>业务系统</td></tr>
+    <tr><td><code>host_id</code></td><td><code>BIGINT</code></td><td>联合主键，外键，级联删除</td><td>主机</td></tr>
+  </table></div>
+
+  <h4><code>system_dependency</code> 系统依赖</h4>
+  <div class="table"><table>
+    <tr><th>字段</th><th>类型</th><th>约束</th><th>说明</th></tr>
+    <tr><td><code>system_id</code></td><td><code>BIGINT</code></td><td>联合主键，外键，级联删除</td><td>依赖方</td></tr>
+    <tr><td><code>depends_on_id</code></td><td><code>BIGINT</code></td><td>联合主键，外键，级联删除</td><td>被依赖方</td></tr>
+    <tr><td colspan="4">表级 CHECK：<code>system_id &lt;&gt; depends_on_id</code>，系统不能依赖自己。不做依赖环检测。</td></tr>
+  </table></div>
+
+  <h4><code>sla_policy</code> SLA 策略</h4>
+  <div class="table"><table>
+    <tr><th>字段</th><th>类型</th><th>约束</th><th>说明</th></tr>
+    <tr><td><code>level</code></td><td><code>SMALLINT</code></td><td>联合主键，CHECK 1～3</td><td>系统等级</td></tr>
+    <tr><td><code>severity</code></td><td><code>TEXT</code></td><td>联合主键，CHECK P1～P4</td><td>严重级别</td></tr>
+    <tr><td><code>response_minutes</code></td><td><code>INTEGER</code></td><td>非空，CHECK &gt; 0</td><td>响应时限</td></tr>
+    <tr><td><code>resolve_minutes</code></td><td><code>INTEGER</code></td><td>非空，CHECK ≥ 响应时限</td><td>恢复时限</td></tr>
+  </table></div>
+  <p>12 行策略（响应 / 恢复，按自然时间计算）：</p>
+  <div class="table"><table>
+    <tr><th>等级</th><th>P1</th><th>P2</th><th>P3</th><th>P4</th></tr>
+    <tr><td>一级</td><td class="num">15分 / 2时</td><td class="num">30分 / 4时</td><td class="num">1时 / 8时</td><td class="num">4时 / 24时</td></tr>
+    <tr><td>二级</td><td class="num">30分 / 4时</td><td class="num">1时 / 8时</td><td class="num">2时 / 24时</td><td class="num">8时 / 48时</td></tr>
+    <tr><td>三级</td><td class="num">1时 / 8时</td><td class="num">2时 / 24时</td><td class="num">4时 / 72时</td><td class="num">24时 / 120时</td></tr>
+  </table></div>
+
+  <h4><code>ticket</code> 工单</h4>
+  <div class="table"><table>
+    <tr><th>字段</th><th>类型</th><th>约束</th><th>说明</th></tr>
+    <tr><td><code>id</code></td><td><code>BIGINT</code></td><td>主键</td><td></td></tr>
+    <tr><td><code>type</code></td><td><code>TEXT</code></td><td>非空，CHECK</td><td><code>incident</code> / <code>problem</code> / <code>change</code></td></tr>
+    <tr><td><code>title</code></td><td><code>TEXT</code></td><td>非空</td><td>标题</td></tr>
+    <tr><td><code>system_id</code></td><td><code>BIGINT</code></td><td>外键，<code>ON DELETE SET NULL</code></td><td>NULL 表示未登记系统</td></tr>
+    <tr><td><code>system_label</code></td><td><code>TEXT</code></td><td>非空，默认空串</td><td>告警里原始的 system 值，关联不上时靠它追查</td></tr>
+    <tr><td><code>severity</code></td><td><code>TEXT</code></td><td>非空，CHECK P1～P4</td><td>严重级别</td></tr>
+    <tr><td><code>status</code></td><td><code>TEXT</code></td><td>非空，CHECK</td><td><code>new</code> / <code>acknowledged</code> / <code>resolved</code> / <code>closed</code> / <code>reopened</code></td></tr>
+    <tr><td><code>source</code></td><td><code>TEXT</code></td><td>非空，CHECK</td><td><code>alert</code> / <code>manual</code></td></tr>
+    <tr><td><code>alert_fingerprint</code></td><td><code>TEXT</code></td><td>可空</td><td>告警指纹，去重的依据</td></tr>
+    <tr><td><code>assignee</code></td><td><code>TEXT</code></td><td>非空，默认空串</td><td>处理人，受理时写入</td></tr>
+    <tr><td><code>created_at</code></td><td><code>TIMESTAMPTZ</code></td><td>非空</td><td>由 <code>Clock</code> 给出，SLA 计时起点</td></tr>
+    <tr><td><code>responded_at</code></td><td><code>TIMESTAMPTZ</code></td><td>可空</td><td>受理时间</td></tr>
+    <tr><td><code>resolved_at</code></td><td><code>TIMESTAMPTZ</code></td><td>可空</td><td>最后一次恢复时间，重开时清空</td></tr>
+    <tr><td><code>closed_at</code></td><td><code>TIMESTAMPTZ</code></td><td>可空</td><td>关闭时间</td></tr>
+    <tr><td><code>response_deadline</code></td><td><code>TIMESTAMPTZ</code></td><td>非空</td><td>响应截止，建单时写定</td></tr>
+    <tr><td><code>resolve_deadline</code></td><td><code>TIMESTAMPTZ</code></td><td>非空</td><td>恢复截止，建单时写定</td></tr>
+    <tr><td colspan="4">表级 CHECK：<code>source &lt;&gt; 'alert' OR alert_fingerprint IS NOT NULL</code>，告警单必须有指纹。</td></tr>
+  </table></div>
+<pre><code>CREATE UNIQUE INDEX ticket_open_fingerprint_uq ON ticket (alert_fingerprint) WHERE status &lt;&gt; 'closed';
+CREATE INDEX ticket_system_id_idx ON ticket (system_id);
+CREATE INDEX ticket_status_idx ON ticket (status);</code></pre>
+
+  <h4><code>ticket_log</code> 工单流水</h4>
+  <div class="table"><table>
+    <tr><th>字段</th><th>类型</th><th>约束</th><th>说明</th></tr>
+    <tr><td><code>id</code></td><td><code>BIGINT</code></td><td>主键</td><td>同时决定流水顺序</td></tr>
+    <tr><td><code>ticket_id</code></td><td><code>BIGINT</code></td><td>非空，外键，级联删除</td><td>所属工单</td></tr>
+    <tr><td><code>actor</code></td><td><code>TEXT</code></td><td>非空</td><td><code>alertmanager</code> / <code>system</code> / 操作人姓名</td></tr>
+    <tr><td><code>action</code></td><td><code>TEXT</code></td><td>非空</td><td><code>created</code> / <code>duplicate_alert</code> / <code>alert_resolved</code> / <code>ack</code> / <code>resolve</code> / <code>close</code> / <code>reopen</code></td></tr>
+    <tr><td><code>from_status</code></td><td><code>TEXT</code></td><td>可空</td><td>变化前状态。告警日志没有状态变化，为 NULL</td></tr>
+    <tr><td><code>to_status</code></td><td><code>TEXT</code></td><td>可空</td><td>变化后状态</td></tr>
+    <tr><td><code>note</code></td><td><code>TEXT</code></td><td>非空，默认空串</td><td>备注</td></tr>
+    <tr><td><code>created_at</code></td><td><code>TIMESTAMPTZ</code></td><td>非空</td><td>发生时间</td></tr>
+  </table></div>
+<pre><code>CREATE INDEX ticket_log_ticket_id_idx ON ticket_log (ticket_id, id);</code></pre>
+
+  <h3 id="decisions">设计取舍</h3>
+  <div class="table"><table>
+    <tr><th>决定</th><th>原因</th></tr>
+    <tr><td>未登记系统用 <code>system_id = NULL</code> 加 <code>system_label</code>，不建占位系统</td><td>占位记录会混进台账列表和"按系统统计"。NULL 自然单独成组，还能提示台账不全</td></tr>
+    <tr><td>工单上存 deadline，不每次按策略现算</td><td>策略改了也不影响已有工单，相当于按签约时的条款执行；判断超时不需要定时任务</td></tr>
+    <tr><td>用部分唯一索引做去重</td><td>只约束未关闭工单，既挡住并发重复建单，又允许关单后的同一告警新建工单</td></tr>
+    <tr><td><code>closed</code> 是终态，重开只能从 <code>resolved</code> 发起</td><td>一张单就是一次故障，MTTR 和达标率的口径最清楚</td></tr>
+    <tr><td>重开清空 <code>resolved_at</code>，历史留在流水</td><td>工单表存当前事实，流水表存全过程。恢复考核以最后一次为准</td></tr>
+    <tr><td>枚举用 <code>TEXT + CHECK</code></td><td>比 PostgreSQL 的 ENUM 类型容易通过迁移修改，sqlc 映射成普通字符串也简单</td></tr>
+    <tr><td><code>sla_policy</code> 进迁移，演示数据进 seed</td><td>策略是系统运行的前提；演示系统和历史工单删了也不影响运行</td></tr>
+    <tr><td>删除厂商或系统时置空，不级联删工单</td><td>考核历史不能因为台账变动而消失</td></tr>
+  </table></div>
+</section>
+
+<section id="monitoring">
+  <h2>监控侧</h2>
+  <p><code>mock-gov-app</code> 暴露三个指标：<code>http_requests_total</code>（Counter）、<code>http_request_duration_seconds</code>（Histogram，桶密集覆盖 1 秒附近）、<code>gov_app_chaos_mode</code>（Gauge）。它自带流量发生器，否则错误率的分母是 0，告警永远不会触发。</p>
+  <p><code>system</code> 标签打在 Prometheus 的抓取配置里，没有写进应用代码。真实环境里被管系统的代码往往改不动，归属关系只能由运维侧标注。</p>
+  <div class="table"><table>
+    <tr><th>告警</th><th>条件</th><th>持续</th><th>级别</th></tr>
+    <tr><td><code>GovAppHighLatency</code></td><td>P95 延迟 &gt; 1s</td><td>1m</td><td>P2</td></tr>
+    <tr><td><code>GovAppHighErrorRate</code></td><td>5xx 占比 &gt; 5%</td><td>1m</td><td>P2</td></tr>
+    <tr><td><code>GovAppProbeDown</code></td><td><code>probe_success == 0</code></td><td>30s</td><td>P1</td></tr>
+    <tr><td><code>HostHighCPU</code></td><td>CPU 使用率 &gt; 85%</td><td>5m</td><td>P3</td></tr>
+  </table></div>
+  <p>Alertmanager 按 <code>[alertname, system]</code> 分组（<code>group_wait</code> 10s、<code>group_interval</code> 1m、<code>repeat_interval</code> 4h），并配置抑制：同系统探活失败时，抑制延迟和错误率告警。规则有 <code>promtool</code> 单元测试，Grafana 的数据源和"系统健康总览"看板通过 provisioning 自动加载。</p>
+</section>
+
+<section id="frontend">
+  <h2>前端</h2>
+  <div class="table"><table>
+    <tr><th>页面</th><th>内容</th></tr>
+    <tr><td>系统台账</td><td>列表支持搜索、等级筛选，顶部提示未登记的告警来源。详情含厂商（合同到期提醒）、主机、上下游依赖、在办工单</td></tr>
+    <tr><td>工单</td><td>列表可筛选，超时整行标红，每 30 秒刷新，可手工建单。详情含两个时限的倒计时、流水时间线、当前状态允许的操作按钮</td></tr>
+    <tr><td>SLA 看板</td><td>指标卡、达标率图（含 90% 示例考核线）、MTTR 图、明细表。可按厂商或系统分组，可选日期范围</td></tr>
+  </table></div>
+  <p>前端的 <code>allowedActions</code> 只决定显示哪些按钮，真正的规则在后端。两边不一致时后端返回 409，页面刷新到最新状态并说明原因。</p>
+</section>
+
+<section id="run">
+  <h2>运行与演示</h2>
+<pre><code>make up            <span class="cmt"># 启动全部容器</span>
+make seed          <span class="cmt"># 台账 + 过去 30 天的 11 张历史工单，可重复执行</span>
+make web           <span class="cmt"># 另开终端：前端 :5173</span>
+make demo-check    <span class="cmt"># 演示前自检</span>
+make test          <span class="cmt"># 单元测试</span>
+make test-integration  <span class="cmt"># 集成测试，需先 make up</span>
+make chaos-error   <span class="cmt"># 注入故障，另有 chaos-slow、chaos-down、chaos-reset</span></code></pre>
+  <p>彩排实测（T+ 为距离注入故障的秒数）：</p>
+  <div class="table"><table>
+    <tr><th>时刻</th><th>事件</th></tr>
+    <tr><td class="num">T+0s</td><td><code>make chaos-error</code></td></tr>
+    <tr><td class="num">T+24s</td><td>Prometheus 告警进入 pending</td></tr>
+    <tr><td class="num">T+84s</td><td>告警变为 firing</td></tr>
+    <tr><td class="num">T+93s</td><td>OpsHub 自动建单：P2，星河软件</td></tr>
+    <tr><td class="num">T+106s</td><td>厂商受理，<code>make chaos-reset</code> 恢复服务</td></tr>
+    <tr><td class="num">T+213s</td><td>收到恢复通知，流水记"告警已恢复"，由甲方确认关单</td></tr>
+  </table></div>
+  <p>完整的 5 分钟演示脚本和常见追问在 <code>docs/DEMO.md</code>。</p>
+</section>
+
+<section id="limits">
+  <h2>已知简化</h2>
+  <ul>
+    <li>前端没有进 docker-compose，需要另外执行 <code>make web</code>。</li>
+    <li>台账没有编辑界面，增删改要调 API。</li>
+    <li>问题单和变更单只能建单，不能流转。</li>
+    <li>没有登录和权限，操作人由调用方填写。</li>
+    <li>SLA 按自然时间计算，不扣除节假日和非工作时间。</li>
+    <li>统计在 Go 里汇总，列表最多返回 200 条，只适合演示规模。</li>
+    <li><code>HostHighCPU</code> 只有规则单元测试，没有用真实负载触发过。</li>
+    <li>抑制规则只用模拟告警验证过：真实宕机时指标消失，延迟告警会自行恢复，走不到抑制。</li>
+    <li>前端没有自动化测试，页面是在浏览器里手动验证的。</li>
+  </ul>
+</section>
+</main>
+</div>
