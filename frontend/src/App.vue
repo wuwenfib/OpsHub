@@ -5,6 +5,8 @@ import { Collection, DataAnalysis, Tickets } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const title = computed(() => route.meta.title ?? '')
+// /systems/GOV-APPLY 这类子页面也让"系统台账"菜单保持高亮
+const activeMenu = computed(() => '/' + (route.path.split('/')[1] ?? ''))
 
 // 后端健康状态：每 15 秒探一次 /healthz（经 Vite 代理转发到后端）。
 const backendOK = ref(null) // null = 尚未探测
@@ -29,7 +31,7 @@ onUnmounted(() => clearInterval(timer))
     <el-aside width="200px" class="aside">
       <div class="logo">OpsHub</div>
       <!-- router 模式：index 即跳转路径；default-active 让当前页高亮 -->
-      <el-menu router :default-active="route.path" class="menu">
+      <el-menu router :default-active="activeMenu" class="menu">
         <el-menu-item index="/systems">
           <el-icon><Collection /></el-icon><span>系统台账</span>
         </el-menu-item>
@@ -62,6 +64,14 @@ body,
 #app {
   margin: 0;
   height: 100%;
+}
+/* 只做浅色主题：明确声明并给出背景色，否则系统深色模式下透明区域会透出黑色画布 */
+html {
+  color-scheme: light;
+}
+body {
+  background: var(--el-bg-color);
+  color: var(--el-text-color-primary);
 }
 </style>
 

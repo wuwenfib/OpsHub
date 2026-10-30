@@ -5,6 +5,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 const routes = [
   { path: '/', redirect: '/systems' },
   { path: '/systems', component: () => import('./views/SystemsView.vue'), meta: { title: '系统台账' } },
+  { path: '/systems/:code', component: () => import('./views/SystemDetailView.vue'), meta: { title: '系统详情' } },
   { path: '/tickets', component: () => import('./views/TicketsView.vue'), meta: { title: '工单' } },
   { path: '/sla', component: () => import('./views/SlaView.vue'), meta: { title: 'SLA 看板' } },
 ]
