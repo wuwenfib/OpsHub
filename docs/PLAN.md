@@ -8,7 +8,7 @@
 
 > 目的：亲眼看到"系统出问题 → 指标异常 → 告警产生"，理解监控体系各组件的分工。
 
-- [ ] **1.1 mock-gov-app 模拟系统**
+- [x] **1.1 mock-gov-app 模拟系统**
   - 做什么：Go 写一个小 HTTP 服务，有 `/api/apply`（模拟办件接口）、`/healthz`、`/metrics`（请求数、错误数、延迟直方图），以及故障注入接口 `/chaos/slow`、`/chaos/error`、`/chaos/reset`。
   - 学什么：Prometheus 指标的四种类型（Counter / Gauge / Histogram / Summary），应用怎么"暴露"自己的健康状态。
   - 验收：`curl :8081/metrics` 能看到自定义指标；调用 `/chaos/slow` 后延迟指标明显升高。
