@@ -114,6 +114,7 @@ make test-integration  # 集成测试，连 compose 里的 opshub_test 库，需
 make seed          # 导入演示数据（可重复执行）
 make tools         # 安装 sqlc（需要 gcc）
 make sqlc          # 改了 migrations 或 queries 后重新生成 store 代码
+make web           # 前端开发服务器 :5173，/api 经 Vite 代理到后端 :8080
 make chaos-slow    # 让 mock-gov-app 变慢，触发延迟告警
 make chaos-error   # 让 mock-gov-app 大量 500，触发错误率告警
 make chaos-down    # 停掉 mock-gov-app，触发探活失败告警

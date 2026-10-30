@@ -3,3 +3,6 @@ bin/
 .env
 frontend/node_modules/
 frontend/dist/
+.claude/launch.json
+*.swp
+*.swo

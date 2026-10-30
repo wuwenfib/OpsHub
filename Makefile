@@ -3,7 +3,7 @@ MOCK    := http://localhost:8081
 
 PROMTOOL := docker run --rm -v $(CURDIR)/deploy/prometheus:/p:ro -w /p/tests --entrypoint promtool prom/prometheus:v3.15.1
 
-.PHONY: up down logs ps test test-rules test-integration tools sqlc seed reload chaos-slow chaos-error chaos-down chaos-reset
+.PHONY: up down logs ps test test-rules test-integration tools sqlc seed web reload chaos-slow chaos-error chaos-down chaos-reset
 
 up:            ## 构建并启动全部容器
 	$(COMPOSE) up -d --build
@@ -36,6 +36,10 @@ sqlc:          ## 改了 migrations 或 queries 后重新生成 store 代码
 
 seed:          ## 导入演示数据（可重复执行）
 	docker exec -i opshub-postgres-1 psql -U opshub -d opshub -v ON_ERROR_STOP=1 -q < backend/seed/demo.sql
+
+web:           ## 启动前端开发服务器 :5173（首次自动安装依赖），/api 代理到后端 :8080
+	cd frontend && [ -d node_modules ] || npm install
+	cd frontend && npm run dev
 
 reload:        ## 改完规则后热加载 Prometheus，无需重启
 	curl -fsS -X POST localhost:9090/-/reload
