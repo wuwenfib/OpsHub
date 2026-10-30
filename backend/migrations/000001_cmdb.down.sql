@@ -1,0 +1,5 @@
+DROP TABLE IF EXISTS system_dependency;
+DROP TABLE IF EXISTS system_host;
+DROP TABLE IF EXISTS host;
+DROP TABLE IF EXISTS business_system;
+DROP TABLE IF EXISTS vendor;

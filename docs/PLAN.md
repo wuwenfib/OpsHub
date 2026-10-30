@@ -37,7 +37,7 @@
 
 > 目的：实现"告警自动变工单，工单带 SLA"，这是整个项目最有价值的部分。
 
-- [ ] **2.1 后端骨架**
+- [x] **2.1 后端骨架**
   - gin + PostgreSQL + migrate，`/healthz` 可用，加入 docker-compose。
   - 验收：`curl :8080/healthz` 返回 ok；容器重启后数据库迁移自动执行。
 

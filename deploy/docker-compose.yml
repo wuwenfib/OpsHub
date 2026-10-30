@@ -94,7 +94,40 @@ services:
       - "${GRAFANA_PORT:-3000}:3000"   # 本机 3000 被占用时在 deploy/.env 里改
     restart: unless-stopped
 
+  # ---------- 流程层：OpsHub ----------
+  # OpsHub 自己的数据库（台账、工单、SLA），与被监控的 MySQL 无关。
+  postgres:
+    image: postgres:16.15-alpine
+    environment:
+      POSTGRES_USER: opshub
+      POSTGRES_PASSWORD: opshub
+      POSTGRES_DB: opshub
+    volumes:
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"   # 本机跑集成测试要连
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "opshub", "-d", "opshub"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  opshub:
+    build: ../backend
+    environment:
+      DATABASE_URL: postgres://opshub:opshub@postgres:5432/opshub?sslmode=disable
+      GIN_MODE: release
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
+  postgres-data:
   mysql-data:
   prometheus-data:
   grafana-data:
