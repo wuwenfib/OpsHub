@@ -115,6 +115,8 @@ make seed          # 导入演示数据（可重复执行）
 make tools         # 安装 sqlc（需要 gcc）
 make sqlc          # 改了 migrations 或 queries 后重新生成 store 代码
 make web           # 前端开发服务器 :5173，/api 经 Vite 代理到后端 :8080
+make demo-check    # 演示前自检（服务在线、无残留告警），打印各页面地址
+make demo-reset    # 清空工单并重新导入历史工单（会删除数据，需输入 yes 确认）
 make chaos-slow    # 让 mock-gov-app 变慢，触发延迟告警
 make chaos-error   # 让 mock-gov-app 大量 500，触发错误率告警
 make chaos-down    # 停掉 mock-gov-app，触发探活失败告警
